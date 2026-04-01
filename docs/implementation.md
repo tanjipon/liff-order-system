@@ -1,8 +1,10 @@
 # 甜點工作室訂購系統｜實作細節與 GitHub Project 規劃
 
-**版本：** v1.0  
+**版本：** v1.1  
 **依據：** dessert-shop-spec.md v1.0  
 **原則：** 最佳軟體工程實踐、單人開發、零成本部署
+
+**v1.1 異動說明：** 依據 DB Function vs Backend Logic 分析結果，調整業務邏輯分層。僅保留真正需要原子性保證的操作於 DB Function（`create_order`、`admin_cancel_order`），其餘狀態轉移邏輯移至 Backend，提升可讀性與可測試性。
 
 ---
 
@@ -46,15 +48,17 @@ dessert-shop/
 │   │   │   ├── liff/
 │   │   │   └── admin/
 │   │   ├── lib/
-│   │   │   ├── supabase.ts  # Supabase client
-│   │   │   ├── liff.ts      # LINE LIFF SDK wrapper
-│   │   │   └── api.ts       # API 呼叫封裝
+│   │   │   ├── supabase.ts      # Supabase client
+│   │   │   ├── liff.ts          # LINE LIFF SDK wrapper
+│   │   │   ├── api.ts           # API 呼叫封裝
+│   │   │   ├── orderStatus.ts   # 狀態轉移驗證（純邏輯，可 unit test）
+│   │   │   └── quota.ts         # Quota 計算（純邏輯，可 unit test）
 │   │   └── __tests__/
 ├── supabase/
-│   ├── migrations/          # 資料庫版本控制
+│   ├── migrations/              # 資料庫版本控制
 │   │   ├── 001_initial_schema.sql
 │   │   ├── 002_rls_policies.sql
-│   │   └── 003_functions.sql
+│   │   └── 003_functions.sql    # 僅保留需要原子性的 2 個 function
 │   ├── seed.sql             # 開發用測試資料
 │   └── config.toml
 ├── docs/
@@ -248,12 +252,20 @@ create policy "order_items_select_own"
 
 ### 3.3 Migration 003 — Database Functions
 
-關鍵業務邏輯以 PostgreSQL Function 實作，確保 transaction 原子性。
+只保留**真正需要原子性保證**的兩個 function。其餘狀態轉移邏輯移至 Backend（見第 4 節）。
+
+| Function | 位置 | 理由 |
+|----------|------|------|
+| `create_order` | DB Function | 多步驟 transaction + 庫存 `FOR UPDATE` 鎖定，放 DB 防止 race condition |
+| `admin_cancel_order` | DB Function | 連鎖釋放庫存 + quota，transaction 保證必要 |
+| `admin_accept_order` | **Backend** | 單純狀態更新 + 排單號計算，無需原子性，放 Backend 提升可測試性 |
+| 其他狀態轉移 | **Backend** | 純狀態驗證，易 unit test，不需 DB |
 
 ```sql
 -- 003_functions.sql
 
 -- (A) 建立訂單（含庫存扣除 + quota 檢查）
+-- 需要 DB Function：多品項庫存鎖定（FOR UPDATE）+ quota + order_items 必須原子完成
 create or replace function create_order(
   p_session_id    uuid,
   p_line_user_id  text,
@@ -265,6 +277,7 @@ declare
   v_total        int := 0;
   v_quota_used   int;
   v_quota_limit  int;
+  v_new_qty      int;
   v_item         jsonb;
   v_product      record;
 begin
@@ -275,7 +288,7 @@ begin
     raise exception 'SESSION_NOT_ACTIVE';
   end if;
 
-  -- 2. 檢查 quota
+  -- 2. 計算此 LINE ID 在此 session 已使用的 quota（排除 cancelled）
   select coalesce(sum(oi.quantity), 0) into v_quota_used
   from orders o
   join order_items oi on oi.order_id = o.id
@@ -283,27 +296,27 @@ begin
     and o.line_user_id = p_line_user_id
     and o.status != 'cancelled';
 
-  -- 計算本次欲購買總量
-  select coalesce(sum((item->>'quantity')::int), 0) into v_quota_used
+  -- 3. 計算本次欲購買總量
+  select coalesce(sum((item->>'quantity')::int), 0) into v_new_qty
   from jsonb_array_elements(p_items) as item;
 
-  if v_quota_used > v_quota_limit then
+  if (v_quota_used + v_new_qty) > v_quota_limit then
     raise exception 'QUOTA_EXCEEDED';
   end if;
 
-  -- 3. 建立訂單
+  -- 4. 建立訂單
   insert into orders (session_id, line_user_id, line_display_name)
   values (p_session_id, p_line_user_id, p_display_name)
   returning id into v_order_id;
 
-  -- 4. 逐項處理品項：扣庫存、建 order_items
+  -- 5. 逐項處理品項：FOR UPDATE 鎖定防止 race condition
   for v_item in select * from jsonb_array_elements(p_items)
   loop
     select * into v_product
     from products
     where id = (v_item->>'product_id')::uuid
       and session_id = p_session_id
-    for update; -- 鎖定防止 race condition
+    for update;
 
     if not found then
       raise exception 'PRODUCT_NOT_FOUND';
@@ -328,7 +341,7 @@ begin
     v_total := v_total + v_product.price * (v_item->>'quantity')::int;
   end loop;
 
-  -- 5. 更新總金額
+  -- 6. 更新總金額
   update orders set total_amount = v_total where id = v_order_id;
 
   return v_order_id;
@@ -336,9 +349,10 @@ end;
 $$;
 
 -- (B) 後台取消訂單（連鎖釋放庫存 + quota）
+-- 需要 DB Function：庫存釋放 + 狀態更新必須原子完成，避免庫存不一致
 create or replace function admin_cancel_order(
-  p_order_id     uuid,
-  p_reason       text
+  p_order_id uuid,
+  p_reason   text
 ) returns void language plpgsql as $$
 declare
   v_order record;
@@ -350,6 +364,7 @@ begin
     raise exception 'ORDER_NOT_FOUND';
   end if;
 
+  -- 狀態守門：payment_submitted 後不可取消
   if v_order.status = 'payment_submitted' then
     raise exception 'CANNOT_CANCEL_PAYMENT_SUBMITTED';
   end if;
@@ -367,7 +382,7 @@ begin
     where id = v_item.product_id;
   end loop;
 
-  -- 更新狀態
+  -- 更新狀態（quota 自動隨 status != 'cancelled' 條件釋放）
   update orders
   set status = 'cancelled',
       cancelled_by = 'admin',
@@ -375,43 +390,11 @@ begin
   where id = p_order_id;
 end;
 $$;
-
--- (C) 接受訂單（分配排單號）
-create or replace function admin_accept_order(
-  p_order_id uuid
-) returns int language plpgsql as $$
-declare
-  v_queue_number int;
-  v_session_id   uuid;
-begin
-  select session_id into v_session_id
-  from orders where id = p_order_id;
-
-  -- 取得此 session 目前最大排單號 + 1
-  select coalesce(max(queue_number), 0) + 1 into v_queue_number
-  from orders
-  where session_id = v_session_id
-    and queue_number is not null;
-
-  update orders
-  set status = 'in_production',
-      queue_number = v_queue_number
-  where id = p_order_id and status = 'pending';
-
-  if not found then
-    raise exception 'ORDER_NOT_PENDING';
-  end if;
-
-  return v_queue_number;
-end;
-$$;
 ```
 
 ---
 
 ## 4. 後端 API 實作細節
-
-Next.js **Route Handlers**（`app/api/`）作為 API 層，呼叫 Supabase function 或直接使用 service role key 操作資料庫。
 
 ### 4.1 LINE ID 驗證 Middleware
 
@@ -424,7 +407,6 @@ export async function verifyLiffToken(req: NextRequest) {
   const token = req.headers.get('x-liff-token')
   if (!token) throw new Error('UNAUTHORIZED')
 
-  // 呼叫 LINE API 驗證 token，取得 LINE user profile
   const profile = await getLiffProfile(token)
   return profile // { userId, displayName }
 }
@@ -446,57 +428,148 @@ export function verifyAdmin(req: NextRequest) {
 }
 ```
 
-### 4.3 統一錯誤處理
+### 4.3 訂單狀態機（Backend 純邏輯）
+
+狀態轉移驗證放在 Backend，與資料庫完全解耦，可純 unit test。
+
+```typescript
+// lib/orderStatus.ts
+import { OrderStatus } from '@/types'
+
+// 定義允許的狀態轉移表
+const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  pending:           ['in_production', 'cancelled'],
+  in_production:     ['pending_payment', 'cancelled'],
+  pending_payment:   ['payment_submitted', 'cancelled'],
+  payment_submitted: ['completed'],
+  completed:         [],
+  cancelled:         [],
+}
+
+export function assertTransition(
+  current: OrderStatus,
+  next: OrderStatus
+): void {
+  const allowed = ALLOWED_TRANSITIONS[current]
+  if (!allowed.includes(next)) {
+    throw new Error(`INVALID_TRANSITION:${current}->${next}`)
+  }
+}
+
+// 取消限制：payment_submitted 後不可取消
+export function assertCancellable(status: OrderStatus): void {
+  if (status === 'payment_submitted') {
+    throw new Error('CANNOT_CANCEL_PAYMENT_SUBMITTED')
+  }
+  if (status === 'completed' || status === 'cancelled') {
+    throw new Error('ORDER_ALREADY_FINALIZED')
+  }
+}
+```
+
+### 4.4 Quota 預檢（Backend 純邏輯）
+
+前端送出前呼叫預檢 API，提早給使用者回饋。DB Function 內部仍做最終驗證（double-check），防止 race condition。
+
+```typescript
+// lib/quota.ts
+
+type OrderSnapshot = { status: string; quantity: number }
+
+// 計算已使用的 quota（cancelled 不計，completed 計入）
+export function calcQuotaUsed(orders: OrderSnapshot[]): number {
+  return orders
+    .filter(o => o.status !== 'cancelled')
+    .reduce((sum, o) => sum + o.quantity, 0)
+}
+
+export function assertQuota(used: number, incoming: number, limit: number): void {
+  if (used + incoming > limit) {
+    throw new Error('QUOTA_EXCEEDED')
+  }
+}
+```
+
+### 4.5 admin_accept_order（Backend 實作）
+
+邏輯單純（狀態更新 + 排單號計算），不需原子性，放 Backend 提升可讀性與可測試性。
+
+```typescript
+// app/api/admin/orders/[id]/accept/route.ts
+import { verifyAdmin } from '@/lib/auth/verifyAdmin'
+import { assertTransition } from '@/lib/orderStatus'
+import { errorResponse } from '@/lib/api/response'
+import { supabaseAdmin } from '@/lib/supabase'
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    verifyAdmin(req)
+
+    // 1. 取得訂單現狀
+    const { data: order, error: fetchError } = await supabaseAdmin
+      .from('orders')
+      .select('status, session_id')
+      .eq('id', params.id)
+      .single()
+
+    if (fetchError || !order) return errorResponse('ORDER_NOT_FOUND', 404)
+
+    // 2. 狀態機驗證（Backend 純邏輯）
+    assertTransition(order.status, 'in_production')
+
+    // 3. 計算排單號：此 session 目前最大值 + 1
+    const { data: maxRow } = await supabaseAdmin
+      .from('orders')
+      .select('queue_number')
+      .eq('session_id', order.session_id)
+      .not('queue_number', 'is', null)
+      .order('queue_number', { ascending: false })
+      .limit(1)
+      .single()
+
+    const queueNumber = (maxRow?.queue_number ?? 0) + 1
+
+    // 4. 更新狀態
+    const { error: updateError } = await supabaseAdmin
+      .from('orders')
+      .update({ status: 'in_production', queue_number: queueNumber })
+      .eq('id', params.id)
+
+    if (updateError) throw updateError
+
+    return Response.json({ queueNumber }, { status: 200 })
+
+  } catch (e: any) {
+    return errorResponse(e.message)
+  }
+}
+```
+
+其他後台狀態操作（`reject`、`ready`、`confirm-payment`）依相同模式實作：取得訂單 → `assertTransition()` 驗證 → `supabaseAdmin.update()`。
+
+### 4.6 統一錯誤處理
 
 ```typescript
 // lib/api/response.ts
 export function errorResponse(code: string, status = 400) {
   const messages: Record<string, string> = {
-    UNAUTHORIZED:                    '請透過 LINE 開啟此頁面',
-    FORBIDDEN:                       '無操作權限',
-    QUOTA_EXCEEDED:                  '已超過本次開單每人購買上限',
-    INSUFFICIENT_STOCK:              '商品庫存不足',
-    SESSION_NOT_ACTIVE:              '目前沒有開放中的開單',
-    ORDER_NOT_FOUND:                 '找不到此訂單',
-    CANNOT_CANCEL_PAYMENT_SUBMITTED: '付款確認中的訂單無法取消',
-    ORDER_ALREADY_FINALIZED:         '此訂單已結束',
-    ORDER_NOT_PENDING:               '此訂單狀態不允許此操作',
+    UNAUTHORIZED:                      '請透過 LINE 開啟此頁面',
+    FORBIDDEN:                         '無操作權限',
+    QUOTA_EXCEEDED:                    '已超過本次開單每人購買上限',
+    INSUFFICIENT_STOCK:                '商品庫存不足',
+    SESSION_NOT_ACTIVE:                '目前沒有開放中的開單',
+    ORDER_NOT_FOUND:                   '找不到此訂單',
+    CANNOT_CANCEL_PAYMENT_SUBMITTED:   '付款確認中的訂單無法取消',
+    ORDER_ALREADY_FINALIZED:           '此訂單已結束',
+    INVALID_TRANSITION:                '此訂單狀態不允許此操作',
   }
   return Response.json(
     { error: code, message: messages[code] ?? '系統錯誤，請稍後再試' },
     { status }
   )
-}
-```
-
-### 4.4 API 路由規範
-
-每個 Route Handler 遵循相同結構：
-
-```typescript
-// app/api/orders/route.ts（建立訂單範例）
-import { verifyLiffToken } from '@/lib/auth/verifyLiff'
-import { errorResponse } from '@/lib/api/response'
-import { supabaseAdmin } from '@/lib/supabase'
-
-export async function POST(req: NextRequest) {
-  try {
-    const profile = await verifyLiffToken(req)
-    const body = await req.json()
-
-    const { data, error } = await supabaseAdmin.rpc('create_order', {
-      p_session_id:   body.sessionId,
-      p_line_user_id: profile.userId,
-      p_display_name: profile.displayName,
-      p_items:        body.items,
-    })
-
-    if (error) return errorResponse(error.message)
-    return Response.json({ orderId: data }, { status: 201 })
-
-  } catch (e: any) {
-    return errorResponse(e.message)
-  }
 }
 ```
 
@@ -563,62 +636,104 @@ export function useOrderStatus(lineUserId: string) {
 
 ## 6. 測試策略
 
-採三層測試金字塔，單人開發以「高信心、低維護成本」為原則。
+採三層測試金字塔，單人開發以「高信心、低維護成本」為原則。業務邏輯移至 Backend 後，Unit Test 覆蓋範圍大幅提升，減少對真實 DB 的依賴。
 
 ```
         E2E Tests（少量，保護關鍵路徑）
        ────────────────────────────────
       Integration Tests（API + DB Function）
      ────────────────────────────────────────
-    Unit Tests（純邏輯、工具函式）
+    Unit Tests（純邏輯：狀態機、quota、工具函式）  ← 覆蓋範圍擴大
 ```
 
 ### 6.1 Unit Tests
 
-**範圍：** 不涉及 I/O 的純函式
+**範圍：** 不涉及 I/O 的純函式（`orderStatus.ts`、`quota.ts`、`response.ts`）
 
 **工具：** Vitest
+
+**優點：** 不需啟動 DB，執行速度快，CI 不需額外 setup
 
 **測試項目：**
 
 ```
-lib/quota.ts
-  ✓ 計算 quota：排除 cancelled 訂單
-  ✓ 計算 quota：completed 訂單計入
-  ✓ 超過上限回傳正確錯誤
-
 lib/orderStatus.ts
-  ✓ 允許的狀態轉移應通過
-  ✓ 不允許的狀態轉移應丟出例外
-  ✓ payment_submitted 不允許取消
+  ✓ pending → in_production：允許
+  ✓ pending → cancelled：允許
+  ✓ in_production → pending_payment：允許
+  ✓ in_production → cancelled：允許
+  ✓ pending_payment → payment_submitted：允許
+  ✓ pending_payment → cancelled：允許
+  ✓ payment_submitted → completed：允許
+  ✓ payment_submitted → cancelled：丟出 CANNOT_CANCEL_PAYMENT_SUBMITTED
+  ✓ completed → 任何狀態：丟出 ORDER_ALREADY_FINALIZED
+  ✓ cancelled → 任何狀態：丟出 ORDER_ALREADY_FINALIZED
+  ✓ 跳躍轉移（pending → completed）：丟出 INVALID_TRANSITION
+
+lib/quota.ts
+  ✓ calcQuotaUsed：排除 cancelled 訂單
+  ✓ calcQuotaUsed：completed 訂單計入
+  ✓ calcQuotaUsed：in_production / pending 皆計入
+  ✓ calcQuotaUsed：空陣列回傳 0
+  ✓ assertQuota：used + incoming <= limit 通過
+  ✓ assertQuota：used + incoming > limit 丟出 QUOTA_EXCEEDED
+  ✓ assertQuota：剛好等於 limit 通過（邊界值）
 
 lib/api/response.ts
-  ✓ 已知錯誤碼回傳正確中文訊息
+  ✓ 已知錯誤碼回傳正確中文訊息與 HTTP status
   ✓ 未知錯誤碼回傳預設訊息
 ```
 
 範例：
 
 ```typescript
+// __tests__/unit/orderStatus.test.ts
+import { describe, it, expect } from 'vitest'
+import { assertTransition, assertCancellable } from '@/lib/orderStatus'
+
+describe('assertTransition', () => {
+  it('allows valid transitions', () => {
+    expect(() => assertTransition('pending', 'in_production')).not.toThrow()
+    expect(() => assertTransition('in_production', 'cancelled')).not.toThrow()
+  })
+
+  it('rejects payment_submitted → cancelled', () => {
+    expect(() => assertTransition('payment_submitted', 'cancelled'))
+      .toThrow('CANNOT_CANCEL_PAYMENT_SUBMITTED')
+  })
+
+  it('rejects skip transitions', () => {
+    expect(() => assertTransition('pending', 'completed'))
+      .toThrow('INVALID_TRANSITION')
+  })
+})
+
 // __tests__/unit/quota.test.ts
 import { describe, it, expect } from 'vitest'
-import { calcQuotaUsed } from '@/lib/quota'
+import { calcQuotaUsed, assertQuota } from '@/lib/quota'
 
 describe('calcQuotaUsed', () => {
-  it('excludes cancelled orders', () => {
+  it('excludes cancelled, includes completed', () => {
     const orders = [
-      { status: 'completed', quantity: 1 },
-      { status: 'cancelled', quantity: 2 },
+      { status: 'completed',     quantity: 1 },
+      { status: 'cancelled',     quantity: 2 },
       { status: 'in_production', quantity: 1 },
     ]
     expect(calcQuotaUsed(orders)).toBe(2)
   })
 
-  it('includes completed orders', () => {
-    const orders = [
-      { status: 'completed', quantity: 2 },
-    ]
-    expect(calcQuotaUsed(orders)).toBe(2)
+  it('returns 0 for empty array', () => {
+    expect(calcQuotaUsed([])).toBe(0)
+  })
+})
+
+describe('assertQuota', () => {
+  it('passes when exactly at limit', () => {
+    expect(() => assertQuota(1, 1, 2)).not.toThrow()
+  })
+
+  it('throws when over limit', () => {
+    expect(() => assertQuota(1, 2, 2)).toThrow('QUOTA_EXCEEDED')
   })
 })
 ```
@@ -629,14 +744,16 @@ describe('calcQuotaUsed', () => {
 
 **工具：** Vitest + Supabase 本地實例（`supabase start`）
 
-**測試策略：** 每個測試案例前重置資料庫至 seed 狀態，確保隔離
+**策略：** 每個測試案例前重置資料庫至 seed 狀態，確保隔離
+
+**注意：** 狀態轉移的「拒絕」案例（如 payment_submitted 取消）已由 Unit Test 覆蓋，Integration Test 聚焦於「DB 副作用是否正確」（庫存數字、quota 計算）。
 
 **測試項目：**
 
 ```
 POST /api/orders（建立訂單）
   ✓ 正常下單：庫存正確扣除
-  ✓ 正常下單：order_items 正確建立
+  ✓ 正常下單：order_items 正確建立，total_amount 正確
   ✓ 無效 LIFF token：回傳 401
   ✓ session 未開放：回傳 SESSION_NOT_ACTIVE
   ✓ 超過 quota：回傳 QUOTA_EXCEEDED
@@ -644,33 +761,34 @@ POST /api/orders（建立訂單）
   ✓ 同時兩筆訂單搶最後一個庫存：只有一筆成功（race condition）
 
 PUT /api/orders/:id（修改訂單）
-  ✓ pending 狀態可修改，庫存正確更新
-  ✓ in_production 狀態修改：回傳 403
-  ✓ 修改後超過 quota：回傳 QUOTA_EXCEEDED
+  ✓ pending 狀態可修改，庫存正確更新（舊庫存釋放、新庫存扣除）
+  ✓ 修改後 total_amount 正確重新計算
+  ✓ 非 pending 狀態修改：回傳 INVALID_TRANSITION（由 assertTransition 攔截）
 
 DELETE /api/orders/:id（客戶取消）
   ✓ pending 狀態可取消，庫存正確釋放
   ✓ 取消後 quota 釋放，同一 LINE ID 可重新下單
-  ✓ in_production 狀態取消：回傳 403
+  ✓ 非 pending 狀態取消：回傳 INVALID_TRANSITION
 
 PATCH /api/admin/orders/:id/accept
-  ✓ pending → in_production，排單號正確遞增
-  ✓ 非 pending 狀態：回傳錯誤
+  ✓ pending → in_production，排單號正確遞增（多筆訂單驗證序號不重複）
+  ✓ 排單號從 1 開始，同一 session 第二筆為 2
 
 PATCH /api/admin/orders/:id/cancel
-  ✓ in_production 可取消，庫存釋放，quota 釋放
-  ✓ pending_payment 可取消，庫存釋放，quota 釋放
+  ✓ in_production 可取消，庫存正確釋放
+  ✓ pending_payment 可取消，庫存正確釋放
+  ✓ 取消後同一 LINE ID 可重新下單（quota 已釋放）
   ✓ payment_submitted 取消：回傳 CANNOT_CANCEL_PAYMENT_SUBMITTED
   ✓ completed 取消：回傳 ORDER_ALREADY_FINALIZED
-  ✓ 取消後同一 LINE ID 可重新下單
 
 PATCH /api/admin/orders/:id/confirm-payment
   ✓ payment_submitted → completed
-  ✓ completed 後 quota 不釋放
+  ✓ completed 後 quota 不釋放（同一 LINE ID 無法在此 session 再次下單至上限外）
 
 GET /admin/sessions/:id/stats
   ✓ 回傳正確訂單數、各品項數量、總金額
-  ✓ 取消訂單不計入銷售金額
+  ✓ cancelled 訂單不計入銷售金額
+  ✓ 回購客戶數正確（跨 session 同一 LINE ID）
 ```
 
 ### 6.3 E2E Tests
@@ -849,71 +967,75 @@ jobs:
 [chore][layer: infra]  #002 設定 Supabase 本地開發環境
 [chore][layer: db]     #003 Migration 001：初始 Schema
 [chore][layer: db]     #004 Migration 002：RLS Policies
-[chore][layer: db]     #005 Migration 003：DB Functions（create_order、admin_cancel_order、admin_accept_order）
+[chore][layer: db]     #005 Migration 003：DB Functions（create_order、admin_cancel_order）
 [chore][layer: db]     #006 建立 seed.sql 測試資料
-[type: test]           #007 建立 Vitest 測試框架與 Unit Test 基礎設定
-[type: test]           #008 Integration Test：create_order DB Function
-[type: test]           #009 Integration Test：admin_cancel_order DB Function
-[chore][layer: infra]  #010 設定 GitHub Actions CI workflow
+[chore][layer: api]    #007 實作 lib/orderStatus.ts（狀態機純邏輯）
+[chore][layer: api]    #008 實作 lib/quota.ts（quota 計算純邏輯）
+[type: test]           #009 建立 Vitest 測試框架與設定
+[type: test]           #010 Unit Test：lib/orderStatus.ts 全案例
+[type: test]           #011 Unit Test：lib/quota.ts 全案例
+[type: test]           #012 Integration Test：create_order DB Function
+[type: test]           #013 Integration Test：admin_cancel_order DB Function
+[chore][layer: infra]  #014 設定 GitHub Actions CI workflow
 ```
 
 #### M2 — 客戶下單
 
 ```
-[type: feature][layer: api]      #011 API：GET /api/sessions/active
-[type: feature][layer: api]      #012 API：POST /api/orders（含 LIFF token 驗證）
-[type: feature][layer: api]      #013 LIFF token 驗證 middleware
-[type: test]                     #014 Integration Test：POST /api/orders 全案例
-[type: feature][layer: frontend] #015 LIFF 訂購頁：商品列表與數量選擇
-[type: feature][layer: frontend] #016 LIFF 訂購頁：Quota 即時顯示
-[type: feature][layer: frontend] #017 LIFF 訂購頁：送出訂單與成功畫面
-[type: test]                     #018 E2E Test：完整訂購流程 Happy Path
+[type: feature][layer: api]      #015 API：GET /api/sessions/active
+[type: feature][layer: api]      #016 API：POST /api/orders（含 LIFF token 驗證，呼叫 create_order DB Function）
+[type: feature][layer: api]      #017 LIFF token 驗證 middleware
+[type: test]                     #018 Integration Test：POST /api/orders 全案例
+[type: feature][layer: frontend] #019 LIFF 訂購頁：商品列表與數量選擇
+[type: feature][layer: frontend] #020 LIFF 訂購頁：Quota 即時顯示
+[type: feature][layer: frontend] #021 LIFF 訂購頁：送出訂單與成功畫面
+[type: test]                     #022 E2E Test：完整訂購流程 Happy Path
 ```
 
 #### M3 — 客戶查詢
 
 ```
-[type: feature][layer: api]      #019 API：GET /api/orders（依 LINE ID 查詢）
-[type: feature][layer: api]      #020 API：PATCH /api/orders/:id/remit（填入匯款後五碼）
-[type: feature][layer: api]      #021 API：PUT /api/orders/:id（修改訂單）
-[type: feature][layer: api]      #022 API：DELETE /api/orders/:id（客戶取消）
-[type: test]                     #023 Integration Test：修改 / 取消訂單全案例
-[type: feature][layer: frontend] #024 LIFF 訂單查詢頁：狀態顯示與各狀態對應 UI
-[type: feature][layer: frontend] #025 LIFF 訂單查詢頁：修改訂單流程
-[type: feature][layer: frontend] #026 LIFF 訂單查詢頁：取消訂單確認
-[type: feature][layer: frontend] #027 LIFF 訂單查詢頁：待付款 — 顯示匯款資訊與填入後五碼
-[type: test]                     #028 E2E Test：防黃牛阻擋與取消後重新下單
+[type: feature][layer: api]      #023 API：GET /api/orders（依 LINE ID 查詢）
+[type: feature][layer: api]      #024 API：PATCH /api/orders/:id/remit（填入匯款後五碼）
+[type: feature][layer: api]      #025 API：PUT /api/orders/:id（修改訂單，含 assertTransition 驗證）
+[type: feature][layer: api]      #026 API：DELETE /api/orders/:id（客戶取消，含 assertTransition 驗證）
+[type: test]                     #027 Integration Test：修改 / 取消訂單全案例
+[type: feature][layer: frontend] #028 LIFF 訂單查詢頁：狀態顯示與各狀態對應 UI
+[type: feature][layer: frontend] #029 LIFF 訂單查詢頁：修改訂單流程
+[type: feature][layer: frontend] #030 LIFF 訂單查詢頁：取消訂單確認
+[type: feature][layer: frontend] #031 LIFF 訂單查詢頁：待付款 — 顯示匯款資訊與填入後五碼
+[type: test]                     #032 E2E Test：防黃牛阻擋與取消後重新下單
 ```
 
 #### M4 — 後台操作
 
 ```
-[chore][layer: api]              #029 後台 Admin 驗證 middleware
-[type: feature][layer: api]      #030 API：PATCH /admin/orders/:id/accept
-[type: feature][layer: api]      #031 API：PATCH /admin/orders/:id/reject
-[type: feature][layer: api]      #032 API：PATCH /admin/orders/:id/ready
-[type: feature][layer: api]      #033 API：PATCH /admin/orders/:id/cancel
-[type: feature][layer: api]      #034 API：PATCH /admin/orders/:id/confirm-payment
-[type: feature][layer: api]      #035 API：POST /admin/sessions（新增開單）
-[type: feature][layer: api]      #036 API：POST /admin/products（新增商品）
-[type: test]                     #037 Integration Test：後台操作全案例
-[type: feature][layer: frontend] #038 後台：進行中訂單 Dashboard（待確認 / 製作中 / 待付款 / 確認付款中）
-[type: feature][layer: frontend] #039 後台：接單 / 拒絕 / 取消操作（含取消原因輸入）
-[type: feature][layer: frontend] #040 後台：新增開單表單
-[chore][layer: infra]            #041 設定 GitHub Actions CD workflow（Vercel 部署）
-[chore][layer: infra]            #042 設定 Supabase migration 自動套用
+[chore][layer: api]              #033 後台 Admin 驗證 middleware
+[type: feature][layer: api]      #034 API：PATCH /admin/orders/:id/accept（Backend 實作，含排單號計算）
+[type: feature][layer: api]      #035 API：PATCH /admin/orders/:id/reject
+[type: feature][layer: api]      #036 API：PATCH /admin/orders/:id/ready
+[type: feature][layer: api]      #037 API：PATCH /admin/orders/:id/cancel（呼叫 admin_cancel_order DB Function）
+[type: feature][layer: api]      #038 API：PATCH /admin/orders/:id/confirm-payment
+[type: feature][layer: api]      #039 API：POST /admin/sessions（新增開單）
+[type: feature][layer: api]      #040 API：POST /admin/products（新增商品）
+[type: test]                     #041 Integration Test：後台操作全案例
+[type: feature][layer: frontend] #042 後台：進行中訂單 Dashboard（待確認 / 製作中 / 待付款 / 確認付款中）
+[type: feature][layer: frontend] #043 後台：接單 / 拒絕 / 取消操作（含取消原因輸入）
+[type: feature][layer: frontend] #044 後台：新增開單表單
+[chore][layer: infra]            #045 設定 GitHub Actions CD workflow（Vercel 部署）
+[chore][layer: infra]            #046 設定 Supabase migration 自動套用
 ```
 
 #### M5 — 後台報表
 
 ```
-[type: feature][layer: api]      #043 API：GET /admin/orders（歷史查詢，支援篩選）
-[type: feature][layer: api]      #044 API：GET /admin/orders/export（CSV 匯出）
-[type: feature][layer: api]      #045 API：GET /admin/sessions/:id/stats
-[type: test]                     #046 Integration Test：歷史查詢與統計 API
-[type: feature][layer: frontend] #047 後台：歷史訂單查詢頁（篩選 + 列表）
-[type: feature][layer: frontend] #048 後台：CSV 匯出按鈕
-[type: feature][layer: frontend] #049 後台：開單統計頁（數字摘要）
+[type: feature][layer: api]      #047 API：GET /admin/orders（歷史查詢，支援篩選）
+[type: feature][layer: api]      #048 API：GET /admin/orders/export（CSV 匯出）
+[type: feature][layer: api]      #049 API：GET /admin/sessions/:id/stats
+[type: test]                     #050 Integration Test：歷史查詢與統計 API
+[type: feature][layer: frontend] #051 後台：歷史訂單查詢頁（篩選 + 列表）
+[type: feature][layer: frontend] #052 後台：CSV 匯出按鈕
+[type: feature][layer: frontend] #053 後台：開單統計頁（數字摘要）
 ```
 
 ### 8.4 GitHub Project Board 欄位設定
@@ -955,11 +1077,11 @@ PR body 必填：
 
 | Milestone | Issues 數 | 預估工時 |
 |-----------|----------|---------|
-| M1 — 地基 | 10 | 12 hr |
+| M1 — 地基 | 14 | 14 hr |
 | M2 — 客戶下單 | 8 | 10 hr |
 | M3 — 客戶查詢 | 10 | 12 hr |
 | M4 — 後台操作 | 14 | 16 hr |
 | M5 — 後台報表 | 7 | 8 hr |
-| **總計** | **49** | **~58 hr** |
+| **總計** | **53** | **~60 hr** |
 
 單人每週投入約 10~12 小時，五週完成 MVP 是合理目標。
