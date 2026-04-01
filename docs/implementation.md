@@ -1,10 +1,12 @@
 # 甜點工作室訂購系統｜實作細節與 GitHub Project 規劃
 
-**版本：** v1.1  
+**版本：** v1.2  
 **依據：** dessert-shop-spec.md v1.0  
 **原則：** 最佳軟體工程實踐、單人開發、零成本部署
 
 **v1.1 異動說明：** 依據 DB Function vs Backend Logic 分析結果，調整業務邏輯分層。僅保留真正需要原子性保證的操作於 DB Function（`create_order`、`admin_cancel_order`），其餘狀態轉移邏輯移至 Backend，提升可讀性與可測試性。
+
+**v1.2 異動說明：** `sessions.per_person_limit` 支援無上限設定。`NULL` 表示不限購，影響 Schema constraint、DB Function quota 檢查、Backend quota 邏輯及對應 Unit Test。
 
 ---
 
@@ -142,7 +144,7 @@ create table sessions (
   opens_at         timestamptz,
   closes_at        timestamptz,
   is_active        boolean not null default false,
-  per_person_limit int not null default 1,
+  per_person_limit int check (per_person_limit > 0),  -- NULL = 無上限；有值時必須 > 0
   created_at       timestamptz not null default now()
 );
 
@@ -281,27 +283,28 @@ declare
   v_item         jsonb;
   v_product      record;
 begin
-  -- 1. 檢查 session 是否開放
+  -- 1. 檢查 session 是否開放，取得 per_person_limit（可為 NULL）
   select per_person_limit into v_quota_limit
   from sessions where id = p_session_id and is_active = true;
   if not found then
     raise exception 'SESSION_NOT_ACTIVE';
   end if;
 
-  -- 2. 計算此 LINE ID 在此 session 已使用的 quota（排除 cancelled）
-  select coalesce(sum(oi.quantity), 0) into v_quota_used
-  from orders o
-  join order_items oi on oi.order_id = o.id
-  where o.session_id = p_session_id
-    and o.line_user_id = p_line_user_id
-    and o.status != 'cancelled';
+  -- 2. quota 檢查：NULL 表示無上限，直接跳過
+  if v_quota_limit is not null then
+    select coalesce(sum(oi.quantity), 0) into v_quota_used
+    from orders o
+    join order_items oi on oi.order_id = o.id
+    where o.session_id = p_session_id
+      and o.line_user_id = p_line_user_id
+      and o.status != 'cancelled';
 
-  -- 3. 計算本次欲購買總量
-  select coalesce(sum((item->>'quantity')::int), 0) into v_new_qty
-  from jsonb_array_elements(p_items) as item;
+    select coalesce(sum((item->>'quantity')::int), 0) into v_new_qty
+    from jsonb_array_elements(p_items) as item;
 
-  if (v_quota_used + v_new_qty) > v_quota_limit then
-    raise exception 'QUOTA_EXCEEDED';
+    if (v_quota_used + v_new_qty) > v_quota_limit then
+      raise exception 'QUOTA_EXCEEDED';
+    end if;
   end if;
 
   -- 4. 建立訂單
@@ -483,7 +486,13 @@ export function calcQuotaUsed(orders: OrderSnapshot[]): number {
     .reduce((sum, o) => sum + o.quantity, 0)
 }
 
-export function assertQuota(used: number, incoming: number, limit: number): void {
+// limit 為 null 表示無上限，直接通過
+export function assertQuota(
+  used: number,
+  incoming: number,
+  limit: number | null
+): void {
+  if (limit === null) return  // 無上限，直接放行
   if (used + incoming > limit) {
     throw new Error('QUOTA_EXCEEDED')
   }
@@ -735,6 +744,10 @@ describe('assertQuota', () => {
   it('throws when over limit', () => {
     expect(() => assertQuota(1, 2, 2)).toThrow('QUOTA_EXCEEDED')
   })
+
+  it('always passes when limit is null (unlimited)', () => {
+    expect(() => assertQuota(999, 999, null)).not.toThrow()
+  })
 })
 ```
 
@@ -757,6 +770,7 @@ POST /api/orders（建立訂單）
   ✓ 無效 LIFF token：回傳 401
   ✓ session 未開放：回傳 SESSION_NOT_ACTIVE
   ✓ 超過 quota：回傳 QUOTA_EXCEEDED
+  ✓ per_person_limit 為 null：不受 quota 限制，可無限下單
   ✓ 庫存不足：回傳 INSUFFICIENT_STOCK
   ✓ 同時兩筆訂單搶最後一個庫存：只有一筆成功（race condition）
 
@@ -1085,3 +1099,5 @@ PR body 必填：
 | **總計** | **53** | **~60 hr** |
 
 單人每週投入約 10~12 小時，五週完成 MVP 是合理目標。
+
+M1 較原始版本增加 4 個 Issues，主要來自 `lib/orderStatus.ts`、`lib/quota.ts` 的實作與對應 Unit Test。這些額外投入在後續 M2~M4 開發時會顯著降低 bug 率，整體是划算的。
