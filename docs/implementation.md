@@ -1,12 +1,14 @@
 # 甜點工作室訂購系統｜實作細節與 GitHub Project 規劃
 
-**版本：** v1.2  
-**依據：** dessert-shop-spec.md v1.0  
+**版本：** v1.3  
+**依據：** spec.md v1.0  
 **原則：** 最佳軟體工程實踐、單人開發、零成本部署
 
 **v1.1 異動說明：** 依據 DB Function vs Backend Logic 分析結果，調整業務邏輯分層。僅保留真正需要原子性保證的操作於 DB Function（`create_order`、`admin_cancel_order`），其餘狀態轉移邏輯移至 Backend，提升可讀性與可測試性。
 
 **v1.2 異動說明：** `sessions.per_person_limit` 支援無上限設定。`NULL` 表示不限購，影響 Schema constraint、DB Function quota 檢查、Backend quota 邏輯及對應 Unit Test。
+
+**v1.3 異動說明：** 導入資料庫驅動的 RBAC 系統。新增 `roles`、`permissions`、`role_permissions`、`user_roles` 四張表，取代原本的 shared secret 驗證。後台新增人員管理與角色權限管理功能，讓老闆可自行在後台管理帳號與角色，IT 僅需負責初始設定。新增 M6 Milestone 負責人員與角色管理功能。
 
 ---
 
@@ -20,6 +22,7 @@
 6. [測試策略](#6-測試策略)
 7. [CI/CD 流程](#7-cicd-流程)
 8. [GitHub Project 規劃](#8-github-project-規劃)
+9. [RBAC 系統設計](#9-rbac-系統設計)
 
 ---
 
@@ -54,13 +57,18 @@ dessert-shop/
 │   │   │   ├── liff.ts          # LINE LIFF SDK wrapper
 │   │   │   ├── api.ts           # API 呼叫封裝
 │   │   │   ├── orderStatus.ts   # 狀態轉移驗證（純邏輯，可 unit test）
-│   │   │   └── quota.ts         # Quota 計算（純邏輯，可 unit test）
+│   │   │   ├── quota.ts         # Quota 計算（純邏輯，可 unit test）
+│   │   │   └── auth/
+│   │   │       ├── verifyLiff.ts    # LIFF token 驗證
+│   │   │       ├── verifyAdmin.ts   # 後台 JWT + RBAC 驗證
+│   │   │       └── permissions.ts   # Permission key 型別定義
 │   │   └── __tests__/
 ├── supabase/
 │   ├── migrations/              # 資料庫版本控制
 │   │   ├── 001_initial_schema.sql
 │   │   ├── 002_rls_policies.sql
-│   │   └── 003_functions.sql    # 僅保留需要原子性的 2 個 function
+│   │   ├── 003_functions.sql    # 僅保留需要原子性的 2 個 function
+│   │   └── 004_rbac_seed.sql    # 初始角色、權限資料
 │   ├── seed.sql             # 開發用測試資料
 │   └── config.toml
 ├── docs/
@@ -87,13 +95,12 @@ SUPABASE_SERVICE_ROLE_KEY=     # 僅後台 API 使用，絕不暴露至前端
 # LINE LIFF
 NEXT_PUBLIC_LIFF_ID=
 
-# Admin 驗證（簡易密碼保護後台，MVP 階段）
-ADMIN_SECRET=
-
 # 匯款帳號資訊（顯示給客戶）
 NEXT_PUBLIC_BANK_CODE=
 NEXT_PUBLIC_BANK_ACCOUNT=
 NEXT_PUBLIC_BANK_HOLDER=
+
+# 備註：後台登入改用 Supabase Auth，不再需要 ADMIN_SECRET
 ```
 
 ### 2.2 開發環境啟動
@@ -200,6 +207,40 @@ create index idx_orders_session_line on orders(session_id, line_user_id);
 create index idx_orders_status on orders(status);
 create index idx_orders_created_at on orders(created_at);
 create index idx_order_items_order on order_items(order_id);
+
+-- ── RBAC 系統 ──────────────────────────────────────────
+
+-- roles（角色定義，老闆可在後台新增）
+create table roles (
+  id         uuid primary key default uuid_generate_v4(),
+  name       text not null unique,   -- 'owner', 'assistant', 'baker' 等
+  created_at timestamptz not null default now()
+);
+
+-- permissions（權限項目清單，由 IT 部署時建立，程式碼不再更動）
+create table permissions (
+  id   uuid primary key default uuid_generate_v4(),
+  key  text not null unique,  -- 'orders:cancel', 'sessions:create' 等
+  name text not null          -- '取消訂單', '建立開單' 等（UI 顯示用）
+);
+
+-- role_permissions（角色與權限的多對多關係，老闆可在後台勾選）
+create table role_permissions (
+  role_id       uuid not null references roles(id) on delete cascade,
+  permission_id uuid not null references permissions(id) on delete cascade,
+  primary key (role_id, permission_id)
+);
+
+-- user_roles（人員帳號管理）
+create table user_roles (
+  user_id      uuid primary key references auth.users(id) on delete cascade,
+  role_id      uuid not null references roles(id),
+  display_name text not null,
+  is_active    boolean not null default true,
+  created_at   timestamptz not null default now()
+);
+
+create index idx_user_roles_role on user_roles(role_id);
 ```
 
 ### 3.2 Migration 002 — RLS Policies
@@ -250,6 +291,76 @@ create policy "order_items_select_own"
       where line_user_id = current_setting('app.current_line_user_id', true)
     )
   );
+
+-- ── RBAC 表的 RLS ────────────────────────────────────────
+
+alter table roles            enable row level security;
+alter table permissions      enable row level security;
+alter table role_permissions enable row level security;
+alter table user_roles       enable row level security;
+
+-- roles / permissions / role_permissions：登入用戶皆可讀取（前端渲染角色管理頁面需要）
+create policy "roles_select_authenticated"
+  on roles for select
+  using (auth.role() = 'authenticated');
+
+create policy "permissions_select_authenticated"
+  on permissions for select
+  using (auth.role() = 'authenticated');
+
+create policy "role_permissions_select_authenticated"
+  on role_permissions for select
+  using (auth.role() = 'authenticated');
+
+-- user_roles：使用者只能讀取自己的紀錄（verifyAdmin 查詢用）
+create policy "user_roles_select_own"
+  on user_roles for select
+  using (user_id = auth.uid());
+
+-- 寫入操作（roles / permissions / role_permissions / user_roles）
+-- 皆由後台透過 service role key 執行，不開放 RLS 寫入 policy
+```
+
+### 3.4 Migration 004 — RBAC 初始資料
+
+IT 部署時執行一次，建立系統內所有權限項目與預設角色。之後老闆在後台自行調整角色與權限的對應關係，不需要再改這份 SQL。
+
+```sql
+-- 004_rbac_seed.sql
+
+-- 1. 建立預設角色
+insert into roles (id, name) values
+  ('00000000-0000-0000-0000-000000000001', 'owner'),
+  ('00000000-0000-0000-0000-000000000002', 'assistant');
+
+-- 2. 建立所有權限項目（固定清單，後續新增功能才會異動）
+insert into permissions (id, key, name) values
+  ('10000000-0000-0000-0000-000000000001', 'sessions:create',          '建立開單'),
+  ('10000000-0000-0000-0000-000000000002', 'sessions:edit',            '編輯開單'),
+  ('10000000-0000-0000-0000-000000000003', 'orders:accept',            '接受訂單'),
+  ('10000000-0000-0000-0000-000000000004', 'orders:reject',            '拒絕訂單'),
+  ('10000000-0000-0000-0000-000000000005', 'orders:mark_ready',        '標記製作完成'),
+  ('10000000-0000-0000-0000-000000000006', 'orders:cancel',            '取消訂單'),
+  ('10000000-0000-0000-0000-000000000007', 'orders:confirm_payment',   '確認付款'),
+  ('10000000-0000-0000-0000-000000000008', 'stats:view',               '查看報表'),
+  ('10000000-0000-0000-0000-000000000009', 'staff:manage',             '管理人員'),
+  ('10000000-0000-0000-0000-000000000010', 'roles:manage',             '管理角色權限');
+
+-- 3. 設定 owner 擁有所有權限
+insert into role_permissions (role_id, permission_id)
+select '00000000-0000-0000-0000-000000000001', id from permissions;
+
+-- 4. 設定 assistant 的預設權限
+insert into role_permissions (role_id, permission_id)
+select '00000000-0000-0000-0000-000000000002', id
+from permissions
+where key in (
+  'orders:accept',
+  'orders:reject',
+  'orders:mark_ready',
+  'orders:confirm_payment',
+  'stats:view'
+);
 ```
 
 ### 3.3 Migration 003 — Database Functions
@@ -415,18 +526,102 @@ export async function verifyLiffToken(req: NextRequest) {
 }
 ```
 
-### 4.2 後台驗證 Middleware
+### 4.2 後台驗證 Middleware（RBAC）
 
-MVP 階段使用 shared secret，後續可升級為 Supabase Auth：
+改用 Supabase Auth JWT 驗證，並查詢 `user_roles` + `role_permissions` 確認權限，取代原本的 shared secret。
+
+```typescript
+// lib/auth/permissions.ts
+// 所有 permission key 的型別定義，與 Migration 004 的資料保持一致
+export type Permission =
+  | 'sessions:create'
+  | 'sessions:edit'
+  | 'orders:accept'
+  | 'orders:reject'
+  | 'orders:mark_ready'
+  | 'orders:cancel'
+  | 'orders:confirm_payment'
+  | 'stats:view'
+  | 'staff:manage'
+  | 'roles:manage'
+```
 
 ```typescript
 // lib/auth/verifyAdmin.ts
-import { NextRequest } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import { Permission } from './permissions'
 
-export function verifyAdmin(req: NextRequest) {
-  const secret = req.headers.get('x-admin-secret')
-  if (secret !== process.env.ADMIN_SECRET) {
+export type AdminContext = {
+  userId: string
+  displayName: string
+  roleId: string
+  roleName: string
+  permissions: Permission[]
+}
+
+export async function verifyAdmin(req: NextRequest): Promise<AdminContext> {
+  const token = req.headers.get('authorization')?.replace('Bearer ', '')
+  if (!token) throw new Error('UNAUTHORIZED')
+
+  // 1. 驗證 JWT，取得 user
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  const { data: { user }, error } = await supabase.auth.getUser(token)
+  if (error || !user) throw new Error('UNAUTHORIZED')
+
+  // 2. 查詢 user_roles + role + permissions（一次 join 完成）
+  const { data, error: roleError } = await supabaseAdmin
+    .from('user_roles')
+    .select(`
+      display_name,
+      is_active,
+      roles (
+        id,
+        name,
+        role_permissions (
+          permissions ( key )
+        )
+      )
+    `)
+    .eq('user_id', user.id)
+    .single()
+
+  if (roleError || !data) throw new Error('UNAUTHORIZED')
+  if (!data.is_active) throw new Error('ACCOUNT_DISABLED')
+
+  const permissions = data.roles.role_permissions
+    .map((rp: any) => rp.permissions.key as Permission)
+
+  return {
+    userId:      user.id,
+    displayName: data.display_name,
+    roleId:      data.roles.id,
+    roleName:    data.roles.name,
+    permissions,
+  }
+}
+
+// 權限驗證 helper
+export function assertPermission(ctx: AdminContext, permission: Permission): void {
+  if (!ctx.permissions.includes(permission)) {
     throw new Error('FORBIDDEN')
+  }
+}
+```
+
+每支後台 API 使用方式：
+
+```typescript
+// 範例：取消訂單（需要 orders:cancel 權限）
+export async function PATCH(req: NextRequest, { params }) {
+  try {
+    const ctx = await verifyAdmin(req)
+    assertPermission(ctx, 'orders:cancel')
+    // 執行取消邏輯...
+  } catch (e: any) {
+    return errorResponse(e.message)
   }
 }
 ```
@@ -567,6 +762,7 @@ export function errorResponse(code: string, status = 400) {
   const messages: Record<string, string> = {
     UNAUTHORIZED:                      '請透過 LINE 開啟此頁面',
     FORBIDDEN:                         '無操作權限',
+    ACCOUNT_DISABLED:                  '此帳號已停用，請聯絡管理員',
     QUOTA_EXCEEDED:                    '已超過本次開單每人購買上限',
     INSUFFICIENT_STOCK:                '商品庫存不足',
     SESSION_NOT_ACTIVE:                '目前沒有開放中的開單',
@@ -574,6 +770,10 @@ export function errorResponse(code: string, status = 400) {
     CANNOT_CANCEL_PAYMENT_SUBMITTED:   '付款確認中的訂單無法取消',
     ORDER_ALREADY_FINALIZED:           '此訂單已結束',
     INVALID_TRANSITION:                '此訂單狀態不允許此操作',
+    CANNOT_DEACTIVATE_SELF:            '無法停用自己的帳號',
+    CREATE_USER_FAILED:                '建立帳號失敗，請確認 Email 是否已被使用',
+    ROLE_NOT_FOUND:                    '找不到此角色',
+    CANNOT_DELETE_OWNER_ROLE:          '無法刪除 owner 角色',
   }
   return Response.json(
     { error: code, message: messages[code] ?? '系統錯誤，請稍後再試' },
@@ -610,10 +810,13 @@ export async function initLiff() {
 |------|------|
 | `/liff/order` | LIFF 訂購頁（商品列表、數量選擇、送出） |
 | `/liff/status` | LIFF 訂單狀態查詢頁 |
+| `/admin/login` | 後台登入頁（Email + 密碼） |
 | `/admin` | 後台首頁（進行中訂單 Dashboard） |
 | `/admin/orders` | 歷史訂單查詢 |
 | `/admin/sessions/new` | 新增開單 |
 | `/admin/sessions/[id]/stats` | 開單統計 |
+| `/admin/staff` | 人員管理（列表、新增、停用） |
+| `/admin/roles` | 角色管理（列表、新增角色、勾選權限） |
 
 ### 5.3 狀態管理
 
@@ -803,6 +1006,25 @@ GET /admin/sessions/:id/stats
   ✓ 回傳正確訂單數、各品項數量、總金額
   ✓ cancelled 訂單不計入銷售金額
   ✓ 回購客戶數正確（跨 session 同一 LINE ID）
+
+POST /admin/staff（新增人員）
+  ✓ owner 可新增人員，Supabase Auth 建立帳號並寄出邀請信
+  ✓ assistant 新增人員：回傳 FORBIDDEN
+  ✓ Email 已存在：回傳 CREATE_USER_FAILED
+  ✓ 新增後 user_roles 正確建立
+
+PATCH /admin/staff/:id/deactivate（停用帳號）
+  ✓ owner 可停用其他人員
+  ✓ 停用自己：回傳 CANNOT_DEACTIVATE_SELF
+  ✓ 停用後該帳號呼叫任意後台 API：回傳 ACCOUNT_DISABLED
+
+POST /admin/roles（新增角色）
+  ✓ owner 可新增角色
+  ✓ 新增後 role_permissions 可正確設定
+
+PATCH /admin/roles/:id/permissions（更新角色權限）
+  ✓ 更新後該角色人員的 assertPermission 結果即時反映
+  ✓ 嘗試移除 owner 的 roles:manage 權限：回傳 CANNOT_DELETE_OWNER_ROLE
 ```
 
 ### 6.3 E2E Tests
@@ -966,11 +1188,12 @@ jobs:
 
 | Milestone | 目標 | 預計完成 |
 |-----------|------|---------|
-| M1 — 地基 | Supabase Schema + RLS + DB Functions + 測試框架 | 第 1 週 |
+| M1 — 地基 | Supabase Schema + RLS + DB Functions + RBAC seed + 測試框架 | 第 1 週 |
 | M2 — 客戶下單 | LIFF 訂購頁、建立訂單 API、防黃牛 | 第 2 週 |
 | M3 — 客戶查詢 | LIFF 狀態查詢頁、修改 / 取消訂單 | 第 3 週 |
-| M4 — 後台操作 | 後台進行中訂單管理（接單、取消、完成） | 第 4 週 |
+| M4 — 後台操作 | 後台進行中訂單管理（接單、取消、完成）+ 登入頁 | 第 4 週 |
 | M5 — 後台報表 | 歷史訂單查詢、CSV 匯出、開單統計 | 第 5 週 |
+| M6 — 人員與角色管理 | 人員帳號管理、角色新增、權限勾選 | 第 6 週 |
 
 ### 8.3 Issues 清單
 
@@ -979,77 +1202,100 @@ jobs:
 ```
 [chore][layer: infra]  #001 初始化 Monorepo 結構與環境設定
 [chore][layer: infra]  #002 設定 Supabase 本地開發環境
-[chore][layer: db]     #003 Migration 001：初始 Schema
-[chore][layer: db]     #004 Migration 002：RLS Policies
+[chore][layer: db]     #003 Migration 001：初始 Schema（含 RBAC 四張表）
+[chore][layer: db]     #004 Migration 002：RLS Policies（含 RBAC 表）
 [chore][layer: db]     #005 Migration 003：DB Functions（create_order、admin_cancel_order）
-[chore][layer: db]     #006 建立 seed.sql 測試資料
-[chore][layer: api]    #007 實作 lib/orderStatus.ts（狀態機純邏輯）
-[chore][layer: api]    #008 實作 lib/quota.ts（quota 計算純邏輯）
-[type: test]           #009 建立 Vitest 測試框架與設定
-[type: test]           #010 Unit Test：lib/orderStatus.ts 全案例
-[type: test]           #011 Unit Test：lib/quota.ts 全案例
-[type: test]           #012 Integration Test：create_order DB Function
-[type: test]           #013 Integration Test：admin_cancel_order DB Function
-[chore][layer: infra]  #014 設定 GitHub Actions CI workflow
+[chore][layer: db]     #006 Migration 004：RBAC 初始角色與權限 seed
+[chore][layer: db]     #007 建立 seed.sql 開發用測試資料
+[chore][layer: api]    #008 實作 lib/auth/permissions.ts（Permission 型別定義）
+[chore][layer: api]    #009 實作 lib/auth/verifyAdmin.ts（JWT + RBAC 查詢）
+[chore][layer: api]    #010 實作 lib/orderStatus.ts（狀態機純邏輯）
+[chore][layer: api]    #011 實作 lib/quota.ts（quota 計算純邏輯）
+[type: test]           #012 建立 Vitest 測試框架與設定
+[type: test]           #013 Unit Test：lib/orderStatus.ts 全案例
+[type: test]           #014 Unit Test：lib/quota.ts 全案例
+[type: test]           #015 Integration Test：create_order DB Function
+[type: test]           #016 Integration Test：admin_cancel_order DB Function
+[chore][layer: infra]  #017 設定 GitHub Actions CI workflow
 ```
 
 #### M2 — 客戶下單
 
 ```
-[type: feature][layer: api]      #015 API：GET /api/sessions/active
-[type: feature][layer: api]      #016 API：POST /api/orders（含 LIFF token 驗證，呼叫 create_order DB Function）
-[type: feature][layer: api]      #017 LIFF token 驗證 middleware
-[type: test]                     #018 Integration Test：POST /api/orders 全案例
-[type: feature][layer: frontend] #019 LIFF 訂購頁：商品列表與數量選擇
-[type: feature][layer: frontend] #020 LIFF 訂購頁：Quota 即時顯示
-[type: feature][layer: frontend] #021 LIFF 訂購頁：送出訂單與成功畫面
-[type: test]                     #022 E2E Test：完整訂購流程 Happy Path
+[type: feature][layer: api]      #018 API：GET /api/sessions/active
+[type: feature][layer: api]      #019 API：POST /api/orders（含 LIFF token 驗證，呼叫 create_order DB Function）
+[type: feature][layer: api]      #020 LIFF token 驗證 middleware
+[type: test]                     #021 Integration Test：POST /api/orders 全案例
+[type: feature][layer: frontend] #022 LIFF 訂購頁：商品列表與數量選擇
+[type: feature][layer: frontend] #023 LIFF 訂購頁：Quota 即時顯示
+[type: feature][layer: frontend] #024 LIFF 訂購頁：送出訂單與成功畫面
+[type: test]                     #025 E2E Test：完整訂購流程 Happy Path
 ```
 
 #### M3 — 客戶查詢
 
 ```
-[type: feature][layer: api]      #023 API：GET /api/orders（依 LINE ID 查詢）
-[type: feature][layer: api]      #024 API：PATCH /api/orders/:id/remit（填入匯款後五碼）
-[type: feature][layer: api]      #025 API：PUT /api/orders/:id（修改訂單，含 assertTransition 驗證）
-[type: feature][layer: api]      #026 API：DELETE /api/orders/:id（客戶取消，含 assertTransition 驗證）
-[type: test]                     #027 Integration Test：修改 / 取消訂單全案例
-[type: feature][layer: frontend] #028 LIFF 訂單查詢頁：狀態顯示與各狀態對應 UI
-[type: feature][layer: frontend] #029 LIFF 訂單查詢頁：修改訂單流程
-[type: feature][layer: frontend] #030 LIFF 訂單查詢頁：取消訂單確認
-[type: feature][layer: frontend] #031 LIFF 訂單查詢頁：待付款 — 顯示匯款資訊與填入後五碼
-[type: test]                     #032 E2E Test：防黃牛阻擋與取消後重新下單
+[type: feature][layer: api]      #026 API：GET /api/orders（依 LINE ID 查詢）
+[type: feature][layer: api]      #027 API：PATCH /api/orders/:id/remit（填入匯款後五碼）
+[type: feature][layer: api]      #028 API：PUT /api/orders/:id（修改訂單，含 assertTransition 驗證）
+[type: feature][layer: api]      #029 API：DELETE /api/orders/:id（客戶取消，含 assertTransition 驗證）
+[type: test]                     #030 Integration Test：修改 / 取消訂單全案例
+[type: feature][layer: frontend] #031 LIFF 訂單查詢頁：狀態顯示與各狀態對應 UI
+[type: feature][layer: frontend] #032 LIFF 訂單查詢頁：修改訂單流程
+[type: feature][layer: frontend] #033 LIFF 訂單查詢頁：取消訂單確認
+[type: feature][layer: frontend] #034 LIFF 訂單查詢頁：待付款 — 顯示匯款資訊與填入後五碼
+[type: test]                     #035 E2E Test：防黃牛阻擋與取消後重新下單
 ```
 
 #### M4 — 後台操作
 
 ```
-[chore][layer: api]              #033 後台 Admin 驗證 middleware
-[type: feature][layer: api]      #034 API：PATCH /admin/orders/:id/accept（Backend 實作，含排單號計算）
-[type: feature][layer: api]      #035 API：PATCH /admin/orders/:id/reject
-[type: feature][layer: api]      #036 API：PATCH /admin/orders/:id/ready
-[type: feature][layer: api]      #037 API：PATCH /admin/orders/:id/cancel（呼叫 admin_cancel_order DB Function）
-[type: feature][layer: api]      #038 API：PATCH /admin/orders/:id/confirm-payment
-[type: feature][layer: api]      #039 API：POST /admin/sessions（新增開單）
-[type: feature][layer: api]      #040 API：POST /admin/products（新增商品）
-[type: test]                     #041 Integration Test：後台操作全案例
-[type: feature][layer: frontend] #042 後台：進行中訂單 Dashboard（待確認 / 製作中 / 待付款 / 確認付款中）
-[type: feature][layer: frontend] #043 後台：接單 / 拒絕 / 取消操作（含取消原因輸入）
-[type: feature][layer: frontend] #044 後台：新增開單表單
-[chore][layer: infra]            #045 設定 GitHub Actions CD workflow（Vercel 部署）
-[chore][layer: infra]            #046 設定 Supabase migration 自動套用
+[type: feature][layer: frontend] #036 後台登入頁（Email + 密碼，Supabase Auth）
+[type: feature][layer: api]      #037 API：PATCH /admin/orders/:id/accept（含排單號計算，assertPermission orders:accept）
+[type: feature][layer: api]      #038 API：PATCH /admin/orders/:id/reject（assertPermission orders:reject）
+[type: feature][layer: api]      #039 API：PATCH /admin/orders/:id/ready（assertPermission orders:mark_ready）
+[type: feature][layer: api]      #040 API：PATCH /admin/orders/:id/cancel（assertPermission orders:cancel）
+[type: feature][layer: api]      #041 API：PATCH /admin/orders/:id/confirm-payment（assertPermission orders:confirm_payment）
+[type: feature][layer: api]      #042 API：POST /admin/sessions（assertPermission sessions:create）
+[type: feature][layer: api]      #043 API：POST /admin/products（assertPermission sessions:edit）
+[type: test]                     #044 Integration Test：後台操作全案例（含 RBAC 權限驗證）
+[type: feature][layer: frontend] #045 後台：進行中訂單 Dashboard（待確認 / 製作中 / 待付款 / 確認付款中）
+[type: feature][layer: frontend] #046 後台：接單 / 拒絕 / 取消操作（含取消原因輸入）
+[type: feature][layer: frontend] #047 後台：新增開單表單
+[chore][layer: infra]            #048 設定 GitHub Actions CD workflow（Vercel 部署）
+[chore][layer: infra]            #049 設定 Supabase migration 自動套用
 ```
 
 #### M5 — 後台報表
 
 ```
-[type: feature][layer: api]      #047 API：GET /admin/orders（歷史查詢，支援篩選）
-[type: feature][layer: api]      #048 API：GET /admin/orders/export（CSV 匯出）
-[type: feature][layer: api]      #049 API：GET /admin/sessions/:id/stats
-[type: test]                     #050 Integration Test：歷史查詢與統計 API
-[type: feature][layer: frontend] #051 後台：歷史訂單查詢頁（篩選 + 列表）
-[type: feature][layer: frontend] #052 後台：CSV 匯出按鈕
-[type: feature][layer: frontend] #053 後台：開單統計頁（數字摘要）
+[type: feature][layer: api]      #050 API：GET /admin/orders（歷史查詢，支援篩選，assertPermission stats:view）
+[type: feature][layer: api]      #051 API：GET /admin/orders/export（CSV 匯出）
+[type: feature][layer: api]      #052 API：GET /admin/sessions/:id/stats
+[type: test]                     #053 Integration Test：歷史查詢與統計 API
+[type: feature][layer: frontend] #054 後台：歷史訂單查詢頁（篩選 + 列表）
+[type: feature][layer: frontend] #055 後台：CSV 匯出按鈕
+[type: feature][layer: frontend] #056 後台：開單統計頁（數字摘要）
+```
+
+#### M6 — 人員與角色管理
+
+```
+[type: feature][layer: api]      #057 API：GET /admin/staff（assertPermission staff:manage）
+[type: feature][layer: api]      #058 API：POST /admin/staff（inviteUserByEmail + 寫入 user_roles）
+[type: feature][layer: api]      #059 API：PATCH /admin/staff/:id（修改姓名 / 角色）
+[type: feature][layer: api]      #060 API：PATCH /admin/staff/:id/deactivate（含自我停用保護）
+[type: feature][layer: api]      #061 API：PATCH /admin/staff/:id/activate
+[type: feature][layer: api]      #062 API：POST /admin/staff/:id/resend-invite
+[type: feature][layer: api]      #063 API：GET /admin/roles（assertPermission roles:manage）
+[type: feature][layer: api]      #064 API：POST /admin/roles（新增角色）
+[type: feature][layer: api]      #065 API：PATCH /admin/roles/:id/permissions（更新角色權限，保護 owner 不可移除 roles:manage）
+[type: test]                     #066 Integration Test：人員管理 API 全案例
+[type: test]                     #067 Integration Test：角色權限管理 API 全案例
+[type: feature][layer: frontend] #068 後台：人員管理列表頁（顯示姓名、Email、角色、狀態）
+[type: feature][layer: frontend] #069 後台：新增人員表單（填姓名、Email、角色，送出寄邀請信）
+[type: feature][layer: frontend] #070 後台：角色管理頁（角色列表 + 權限勾選）
+[type: feature][layer: frontend] #071 後台：新增角色表單
 ```
 
 ### 8.4 GitHub Project Board 欄位設定
@@ -1067,7 +1313,7 @@ Backlog → In Progress → In Review → Done
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | Title | text | Issue 標題 |
-| Milestone | milestone | M1 ~ M5 |
+| Milestone | milestone | M1 ~ M6 |
 | Layer | single select | db / api / frontend / infra |
 | Priority | single select | high / normal / low |
 | Status | single select | Backlog / In Progress / In Review / Done |
@@ -1091,13 +1337,133 @@ PR body 必填：
 
 | Milestone | Issues 數 | 預估工時 |
 |-----------|----------|---------|
-| M1 — 地基 | 14 | 14 hr |
+| M1 — 地基 | 17 | 16 hr |
 | M2 — 客戶下單 | 8 | 10 hr |
 | M3 — 客戶查詢 | 10 | 12 hr |
 | M4 — 後台操作 | 14 | 16 hr |
 | M5 — 後台報表 | 7 | 8 hr |
-| **總計** | **53** | **~60 hr** |
+| M6 — 人員與角色管理 | 15 | 14 hr |
+| **總計** | **71** | **~76 hr** |
 
-單人每週投入約 10~12 小時，五週完成 MVP 是合理目標。
+單人每週投入約 10~12 小時，六週完成 MVP 是合理目標。
 
-M1 較原始版本增加 4 個 Issues，主要來自 `lib/orderStatus.ts`、`lib/quota.ts` 的實作與對應 Unit Test。這些額外投入在後續 M2~M4 開發時會顯著降低 bug 率，整體是划算的。
+M6 是本版本新增的 Milestone，涵蓋 RBAC 的完整後台 UI（人員管理 + 角色權限勾選），讓老闆無需接觸 Supabase Dashboard 即可自主管理帳號。這部分的工時估算相對寬鬆，因為角色管理頁面的互動較複雜（多對多權限勾選需要特別注意 UX）。
+
+---
+
+## 9. RBAC 系統設計
+
+### 9.1 設計概覽
+
+採資料庫驅動的 RBAC（Role-Based Access Control），角色與權限的對應關係存於資料庫，老闆可在後台 UI 自行調整，無需 IT 介入。
+
+```
+auth.users（Supabase 管理）
+    ↓ user_id
+user_roles ──── role_id ────→ roles
+                                ↓ role_id
+                          role_permissions ──── permission_id ────→ permissions
+```
+
+### 9.2 資料關係說明
+
+| 表格 | 說明 | 由誰維護 |
+|------|------|---------|
+| `auth.users` | 帳號與密碼，Supabase Auth 管理 | IT 初始設定，之後由後台 API 透過 Admin SDK 管理 |
+| `user_roles` | 人員與角色的對應，含姓名與啟用狀態 | 老闆透過後台操作 |
+| `roles` | 角色定義，老闆可自行新增 | 老闆透過後台操作 |
+| `permissions` | 所有權限項目的固定清單 | IT 部署時建立，新功能上線才會新增 |
+| `role_permissions` | 角色與權限的多對多對應，老闆可勾選 | 老闆透過後台操作 |
+
+### 9.3 完整權限清單
+
+| Permission Key | 顯示名稱 | 說明 |
+|----------------|---------|------|
+| `sessions:create` | 建立開單 | 新增開單批次與商品 |
+| `sessions:edit` | 編輯開單 | 修改開單資訊與商品 |
+| `orders:accept` | 接受訂單 | 將訂單從待確認移至製作中 |
+| `orders:reject` | 拒絕訂單 | 拒絕待確認訂單 |
+| `orders:mark_ready` | 標記製作完成 | 通知客戶付款 |
+| `orders:cancel` | 取消訂單 | 取消製作中或待付款訂單 |
+| `orders:confirm_payment` | 確認付款 | 確認客戶匯款完成 |
+| `stats:view` | 查看報表 | 歷史訂單查詢與開單統計 |
+| `staff:manage` | 管理人員 | 新增、編輯、停用人員帳號 |
+| `roles:manage` | 管理角色權限 | 新增角色、調整角色權限 |
+
+### 9.4 預設角色權限配置
+
+| Permission | owner | assistant |
+|------------|-------|-----------|
+| `sessions:create` | ✅ | ❌ |
+| `sessions:edit` | ✅ | ❌ |
+| `orders:accept` | ✅ | ✅ |
+| `orders:reject` | ✅ | ✅ |
+| `orders:mark_ready` | ✅ | ✅ |
+| `orders:cancel` | ✅ | ❌ |
+| `orders:confirm_payment` | ✅ | ✅ |
+| `stats:view` | ✅ | ✅ |
+| `staff:manage` | ✅ | ❌ |
+| `roles:manage` | ✅ | ❌ |
+
+`owner` 為受保護角色，`roles:manage` 權限不可被移除，防止老闆意外把自己鎖在系統外。
+
+### 9.5 IT 初始設定流程
+
+部署後 IT 執行一次，之後老闆完全自主管理：
+
+```
+步驟 1：執行 Migration 004，建立預設角色與權限 seed
+步驟 2：Supabase Dashboard → Authentication → Providers → Email
+         關閉「Confirm email」，讓邀請信直接生效
+步驟 3：Supabase Dashboard → Authentication → Users → Add user
+         建立 owner 帳號（Email + 密碼）
+步驟 4：SQL Editor 查出 owner 帳號的 UUID，插入 user_roles
+         insert into user_roles (user_id, role_id, display_name)
+         values ('owner-uuid', '00000000-0000-0000-0000-000000000001', '老闆姓名');
+步驟 5：告知老闆登入網址與帳密，後續人員管理由老闆自行操作
+```
+
+### 9.6 老闆後台操作流程
+
+**新增人員：**
+
+```
+人員管理頁 → [+ 新增人員]
+  ↓
+填入姓名、Email、選擇角色 → [新增並寄送邀請信]
+  ↓
+系統呼叫 Supabase inviteUserByEmail，寄出邀請信
+新人員點信中連結 → 自行設定密碼 → 即可登入
+```
+
+**新增角色：**
+
+```
+角色管理頁 → [+ 新增角色]
+  ↓
+輸入角色名稱 → 勾選此角色可執行的權限 → [儲存]
+  ↓
+回人員管理，將對應人員的角色改為新角色
+```
+
+**調整既有角色權限：**
+
+```
+角色管理頁 → 點擊角色名稱
+  ↓
+權限列表顯示所有 permission，目前已勾選的打勾
+  ↓
+勾選 / 取消勾選 → [儲存]
+  ↓
+該角色所有人員的操作權限立即生效（下次 API 請求即反映）
+```
+
+### 9.7 安全邊界
+
+| 保護規則 | 實作位置 | 說明 |
+|----------|---------|------|
+| owner 的 `roles:manage` 不可被移除 | API 層 | `PATCH /admin/roles/:id/permissions` 時檢查，違反回傳 `CANNOT_DELETE_OWNER_ROLE` |
+| 不可停用自己 | API 層 | `PATCH /admin/staff/:id/deactivate` 比對 `currentUserId`，違反回傳 `CANNOT_DEACTIVATE_SELF` |
+| 停用帳號後立即生效 | `verifyAdmin` middleware | 每次 API 請求都查詢 `is_active`，停用後下次請求即被擋 |
+| `permissions` 表不開放後台修改 | API 設計 | 不提供新增 / 刪除 permission 的 API，只有 IT 透過 migration 才能異動 |
+| `roles:manage` 操作只有 owner 預設擁有 | Migration 004 seed | assistant 預設不具備此權限，新角色預設也不勾選 |
