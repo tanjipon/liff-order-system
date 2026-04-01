@@ -1,8 +1,10 @@
 # 甜點工作室訂購系統規格書
 
-**版本：** v1.0  
+**版本：** v1.1  
 **最後更新：** 2025-06  
 **性質：** 個人工作室，非正式公司
+
+**v1.1 異動說明：** 同步 implementation v1.3 的設計決策。新增 RBAC 系統（人員管理、角色管理）、`per_person_limit` 支援 NULL 無上限、後台驗證改為 Supabase Auth + RBAC、開發排程更新至六週。
 
 ---
 
@@ -55,15 +57,19 @@
     └── 後台管理頁（Next.js）
     ↓
 後端層（Supabase）
-    ├── REST API（Auto-generated）
-    ├── Auth（LINE ID 驗證）
+    ├── REST API（Next.js Route Handlers）
+    ├── Auth（LINE ID 驗證 / 後台 Supabase Auth）
     └── RLS 規則（防黃牛 / 權限控管）
     ↓
 資料層（Supabase PostgreSQL）
     ├── sessions（開單紀錄）
     ├── products（商品資料）
     ├── orders（訂單紀錄）
-    └── order_items（訂單品項）
+    ├── order_items（訂單品項）
+    ├── roles（後台角色定義）
+    ├── permissions（後台權限項目）
+    ├── role_permissions（角色與權限對應）
+    └── user_roles（後台人員帳號）
 ```
 
 ---
@@ -81,7 +87,7 @@
 | opens_at | timestamp | 開放訂購時間 |
 | closes_at | timestamp | 截止訂購時間 |
 | is_active | boolean | 是否開放中 |
-| per_person_limit | int | 每人購買上限（件數） |
+| per_person_limit | int | 每人購買上限（件數）；`NULL` 表示無上限 |
 
 #### products（商品）
 
@@ -121,6 +127,39 @@
 | quantity | int | 數量 |
 | unit_price | int | 下單當時單價（快照） |
 
+#### roles（後台角色）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid PK | 主鍵 |
+| name | text | 角色名稱，例如 `owner`、`assistant` |
+| created_at | timestamp | 建立時間 |
+
+#### permissions（後台權限項目）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid PK | 主鍵 |
+| key | text | 權限識別碼，例如 `orders:cancel` |
+| name | text | 顯示名稱，例如「取消訂單」 |
+
+#### role_permissions（角色與權限對應）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| role_id | uuid FK | 角色 |
+| permission_id | uuid FK | 權限 |
+
+#### user_roles（後台人員帳號）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| user_id | uuid PK FK | Supabase Auth 使用者 ID |
+| role_id | uuid FK | 所屬角色 |
+| display_name | text | 顯示姓名 |
+| is_active | boolean | 是否啟用（停用時無法登入後台） |
+| created_at | timestamp | 建立時間 |
+
 ### 3.2 防黃牛 Quota 計算
 
 同一 session 內，依 LINE ID 累加非取消狀態的訂購數量：
@@ -136,6 +175,7 @@ WHERE o.session_id = $session_id
 
 - `cancelled` → 釋放 quota，客戶可在同一 session 重新下單
 - `completed` → 計入 quota，不重新開放
+- `per_person_limit` 為 `NULL` → 跳過 quota 檢查，不限購
 
 ---
 
@@ -237,7 +277,7 @@ payment_submitted → completed      （老闆確認收款）
 - 待付款列表：可確認收款、可取消
 - 確認付款中列表：可確認收款
 
-### 7.2 歷史訂單查詢（新增）
+### 7.2 歷史訂單查詢
 
 **篩選條件（可組合）：**
 
@@ -250,7 +290,7 @@ payment_submitted → completed      （老闆確認收款）
 
 **匯出：** 依目前篩選條件匯出 CSV
 
-### 7.3 開單統計（新增）
+### 7.3 開單統計
 
 每個 session 可查看：
 
@@ -259,6 +299,45 @@ payment_submitted → completed      （老闆確認收款）
 - 總銷售金額 / 平均客單價
 - 取消率
 - 回購客戶數（跨 session 重複出現的 LINE ID）
+
+### 7.4 人員管理
+
+具備 `staff:manage` 權限的人員可操作：
+
+- 查看人員列表（顯示姓名、Email、角色、帳號狀態）
+- 新增人員（填姓名、Email、角色，系統寄送邀請信，對方自行設定密碼）
+- 編輯人員姓名或角色
+- 停用 / 啟用帳號（不刪除資料，停用後立即無法登入）
+- 重新寄送邀請信
+
+**安全限制：** 不可停用自己的帳號。
+
+### 7.5 角色管理
+
+具備 `roles:manage` 權限的人員可操作：
+
+- 查看所有角色與各角色的權限配置
+- 新增自訂角色
+- 勾選 / 取消勾選角色的權限項目
+
+**預設角色：** `owner`（全權限）、`assistant`（訂單操作 + 報表）。
+
+**保護規則：** `owner` 角色的 `roles:manage` 權限不可被移除，防止所有人員被鎖在系統外。
+
+**完整權限清單：**
+
+| 權限識別碼 | 顯示名稱 |
+|------------|---------|
+| `sessions:create` | 建立開單 |
+| `sessions:edit` | 編輯開單 |
+| `orders:accept` | 接受訂單 |
+| `orders:reject` | 拒絕訂單 |
+| `orders:mark_ready` | 標記製作完成 |
+| `orders:cancel` | 取消訂單 |
+| `orders:confirm_payment` | 確認付款 |
+| `stats:view` | 查看報表 |
+| `staff:manage` | 管理人員 |
+| `roles:manage` | 管理角色權限 |
 
 ---
 
@@ -289,6 +368,15 @@ payment_submitted → completed      （老闆確認收款）
 | `/admin/orders/:id/cancel` | PATCH | 取消訂單（限 `in_production` / `pending_payment`），附 `cancel_reason` |
 | `/admin/orders/:id/confirm-payment` | PATCH | 確認收款 → `completed` |
 | `/admin/sessions/:id/stats` | GET | 指定 session 統計摘要 |
+| `/admin/staff` | GET | 取得人員列表 |
+| `/admin/staff` | POST | 新增人員（寄送邀請信） |
+| `/admin/staff/:id` | PATCH | 修改人員姓名或角色 |
+| `/admin/staff/:id/deactivate` | PATCH | 停用帳號 |
+| `/admin/staff/:id/activate` | PATCH | 啟用帳號 |
+| `/admin/staff/:id/resend-invite` | POST | 重新寄送邀請信 |
+| `/admin/roles` | GET | 取得角色列表（含各角色權限） |
+| `/admin/roles` | POST | 新增角色 |
+| `/admin/roles/:id/permissions` | PATCH | 更新角色的權限配置 |
 
 ---
 
@@ -300,13 +388,20 @@ payment_submitted → completed      （老闆確認收款）
 - 每筆訂單綁定 LINE ID，後端 RLS 強制驗證
 - 每次下單前檢查同一 session 的 quota，超過直接拒絕
 
-### 9.2 訂單權限
+### 9.2 訂單存取控制
 
-- 客戶只能操作自己的訂單（以 LINE ID 驗證）
-- 後台 API 需獨立驗證老闆身份
+- 客戶只能操作自己的訂單（以 LINE ID 驗證，RLS 強制執行）
 - `payment_submitted` 後，前後台均不顯示取消按鈕，後端亦回傳 403
 
-### 9.3 庫存一致性
+### 9.3 後台存取控制
+
+- 後台採用 **Supabase Auth（Email + 密碼）** 登入，不使用 shared secret
+- 登入後依 JWT 查詢 `user_roles` → `roles` → `role_permissions`，取得該人員的完整權限清單
+- 每支後台 API 明確宣告所需 permission key，無對應權限回傳 403
+- 帳號停用（`is_active = false`）後，即使 JWT 未過期，下次 API 請求也會被擋下
+- `owner` 角色的 `roles:manage` 權限不可被移除，防止老闆意外鎖死整個後台
+
+### 9.4 庫存一致性
 
 - 所有涉及庫存變更的操作（新增訂單、修改訂單、取消訂單）皆以資料庫 transaction 執行，避免超賣
 
@@ -316,8 +411,9 @@ payment_submitted → completed      （老闆確認收款）
 
 | 階段 | 內容 | 目標 |
 |------|------|------|
-| 第一週 | Supabase Schema 建立、RLS 規則、防黃牛邏輯 | 地基建好 |
+| 第一週 | Supabase Schema 建立（含 RBAC 四張表）、RLS 規則、DB Functions、RBAC seed | 地基建好 |
 | 第二週 | LIFF 訂購頁（選購、送出、防黃牛提示） | 客戶可以下單 |
 | 第三週 | LIFF 訂單查詢頁（狀態顯示、修改、取消、填匯款碼） | 客戶可以自助查詢 |
-| 第四週 | 後台進行中訂單管理（接單、拒絕、完成、取消） | 老闆可以操作 |
+| 第四週 | 後台登入頁、進行中訂單管理（接單、拒絕、完成、取消） | 老闆可以操作 |
 | 第五週 | 後台歷史訂單查詢、CSV 匯出、開單統計 | 完整後台 |
+| 第六週 | 後台人員管理、角色管理與權限勾選 | 老闆自主管理帳號 |
