@@ -26,5 +26,8 @@
     "test:integration": "npm run test:integration --workspace=apps/web",
     "test:e2e": "npm run test:e2e --workspace=apps/web",
     "test:coverage": "npm run test:coverage --workspace=apps/web"
+  },
+  "devDependencies": {
+    "supabase": "^2.84.7"
   }
 }
