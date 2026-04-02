@@ -1,0 +1,30 @@
+{
+  "name": "liff-order-system",
+  "version": "0.0.1",
+  "description": "",
+  "homepage": "https://github.com/tanjipon/lift-order-system#readme",
+  "bugs": {
+    "url": "https://github.com/tanjipon/lift-order-system/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tanjipon/lift-order-system.git"
+  },
+  "license": "ISC",
+  "author": "tanji",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/web",
+    "lint": "npm run lint --workspace=apps/web",
+    "typecheck": "npm run typecheck --workspace=apps/web",
+    "test": "npm run test --workspace=apps/web",
+    "test:unit": "npm run test:unit --workspace=apps/web",
+    "test:integration": "npm run test:integration --workspace=apps/web",
+    "test:e2e": "npm run test:e2e --workspace=apps/web",
+    "test:coverage": "npm run test:coverage --workspace=apps/web"
+  }
+}

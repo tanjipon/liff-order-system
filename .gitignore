@@ -1,0 +1,13 @@
+# 環境變數（含真實密鑰，絕不 commit）
+.env
+.env.local
+
+# 套件資料夾
+node_modules/
+
+# Next.js 建置產物
+.next/
+out/
+
+# 測試覆蓋率報告
+coverage/
