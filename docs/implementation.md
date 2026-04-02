@@ -1,7 +1,7 @@
 # 甜點工作室訂購系統｜實作細節與 GitHub Project 規劃
 
-**版本：** v1.3  
-**依據：** spec.md v1.0  
+**版本：** v1.4  
+**依據：** dessert-shop-spec.md v1.2  
 **原則：** 最佳軟體工程實踐、單人開發、零成本部署
 
 **v1.1 異動說明：** 依據 DB Function vs Backend Logic 分析結果，調整業務邏輯分層。僅保留真正需要原子性保證的操作於 DB Function（`create_order`、`admin_cancel_order`），其餘狀態轉移邏輯移至 Backend，提升可讀性與可測試性。
@@ -9,6 +9,8 @@
 **v1.2 異動說明：** `sessions.per_person_limit` 支援無上限設定。`NULL` 表示不限購，影響 Schema constraint、DB Function quota 檢查、Backend quota 邏輯及對應 Unit Test。
 
 **v1.3 異動說明：** 導入資料庫驅動的 RBAC 系統。新增 `roles`、`permissions`、`role_permissions`、`user_roles` 四張表，取代原本的 shared secret 驗證。後台新增人員管理與角色權限管理功能，讓老闆可自行在後台管理帳號與角色，IT 僅需負責初始設定。新增 M6 Milestone 負責人員與角色管理功能。
+
+**v1.4 異動說明：** 新增現金付款方式與取貨方式管理功能。`orders` 表新增 `payment_method`、`pickup_option_id`、`pickup_fee` 三個欄位；新增 `pickup_options` 表；`create_order` DB Function 更新以支援取貨費用快照；狀態機新增現金付款跳過 `payment_submitted` 的路徑；RBAC seed 新增 `pickup_options:manage` 權限；新增 M7 Milestone。
 
 ---
 
@@ -176,6 +178,7 @@ create type order_status as enum (
 );
 
 create type cancelled_by_enum as enum ('customer', 'admin');
+create type payment_method_enum as enum ('bank_transfer', 'cash');
 
 create table orders (
   id                uuid primary key default uuid_generate_v4(),
@@ -183,8 +186,11 @@ create table orders (
   line_user_id      text not null,
   line_display_name text not null,
   status            order_status not null default 'pending',
-  total_amount      int not null default 0,
-  remit_last5       text,
+  payment_method    payment_method_enum not null,          -- 下單時選擇，之後不得修改
+  total_amount      int not null default 0,                -- 商品小計 + pickup_fee
+  remit_last5       text,                                  -- 僅 bank_transfer 適用
+  pickup_option_id  uuid references pickup_options(id),
+  pickup_fee        int not null default 0,                -- 下單當時取貨費用快照
   queue_number      int,
   edit_count        int not null default 0,
   last_edited_at    timestamptz,
@@ -201,6 +207,20 @@ create table order_items (
   quantity   int not null check (quantity > 0),
   unit_price int not null check (unit_price >= 0)
 );
+
+-- pickup_options（取貨方式，老闆在後台管理）
+create table pickup_options (
+  id                       uuid primary key default uuid_generate_v4(),
+  name                     text not null,
+  description              text,
+  extra_fee                int not null default 0 check (extra_fee >= 0),
+  allowed_payment_methods  text[],   -- NULL = 不限制；例如 ['bank_transfer']
+  is_active                boolean not null default true,
+  sort_order               int not null default 0,
+  created_at               timestamptz not null default now()
+);
+
+create index idx_pickup_options_active on pickup_options(is_active, sort_order);
 
 -- index: 常用查詢加速
 create index idx_orders_session_line on orders(session_id, line_user_id);
@@ -344,7 +364,8 @@ insert into permissions (id, key, name) values
   ('10000000-0000-0000-0000-000000000007', 'orders:confirm_payment',   '確認付款'),
   ('10000000-0000-0000-0000-000000000008', 'stats:view',               '查看報表'),
   ('10000000-0000-0000-0000-000000000009', 'staff:manage',             '管理人員'),
-  ('10000000-0000-0000-0000-000000000010', 'roles:manage',             '管理角色權限');
+  ('10000000-0000-0000-0000-000000000010', 'roles:manage',             '管理角色權限'),
+  ('10000000-0000-0000-0000-000000000011', 'pickup_options:manage',    '管理取貨方式');
 
 -- 3. 設定 owner 擁有所有權限
 insert into role_permissions (role_id, permission_id)
@@ -377,22 +398,25 @@ where key in (
 ```sql
 -- 003_functions.sql
 
--- (A) 建立訂單（含庫存扣除 + quota 檢查）
+-- (A) 建立訂單（含庫存扣除 + quota 檢查 + 取貨費用快照）
 -- 需要 DB Function：多品項庫存鎖定（FOR UPDATE）+ quota + order_items 必須原子完成
 create or replace function create_order(
-  p_session_id    uuid,
-  p_line_user_id  text,
-  p_display_name  text,
-  p_items         jsonb  -- [{product_id, quantity}]
+  p_session_id       uuid,
+  p_line_user_id     text,
+  p_display_name     text,
+  p_items            jsonb,           -- [{product_id, quantity}]
+  p_pickup_option_id uuid,
+  p_payment_method   payment_method_enum
 ) returns uuid language plpgsql as $$
 declare
-  v_order_id     uuid;
-  v_total        int := 0;
-  v_quota_used   int;
-  v_quota_limit  int;
-  v_new_qty      int;
-  v_item         jsonb;
-  v_product      record;
+  v_order_id      uuid;
+  v_total         int := 0;
+  v_quota_used    int;
+  v_quota_limit   int;
+  v_new_qty       int;
+  v_item          jsonb;
+  v_product       record;
+  v_pickup        record;
 begin
   -- 1. 檢查 session 是否開放，取得 per_person_limit（可為 NULL）
   select per_person_limit into v_quota_limit
@@ -418,12 +442,33 @@ begin
     end if;
   end if;
 
-  -- 4. 建立訂單
-  insert into orders (session_id, line_user_id, line_display_name)
-  values (p_session_id, p_line_user_id, p_display_name)
+  -- 3. 取得取貨方式，驗證是否開放並快照費用
+  select * into v_pickup
+  from pickup_options
+  where id = p_pickup_option_id and is_active = true;
+  if not found then
+    raise exception 'PICKUP_OPTION_NOT_FOUND';
+  end if;
+
+  -- 4. 驗證付款方式是否符合取貨方式的限制
+  if v_pickup.allowed_payment_methods is not null then
+    if not (p_payment_method::text = any(v_pickup.allowed_payment_methods)) then
+      raise exception 'PAYMENT_METHOD_NOT_ALLOWED';
+    end if;
+  end if;
+
+  -- 5. 建立訂單（含 pickup_fee 快照）
+  insert into orders (
+    session_id, line_user_id, line_display_name,
+    payment_method, pickup_option_id, pickup_fee
+  )
+  values (
+    p_session_id, p_line_user_id, p_display_name,
+    p_payment_method, p_pickup_option_id, v_pickup.extra_fee
+  )
   returning id into v_order_id;
 
-  -- 5. 逐項處理品項：FOR UPDATE 鎖定防止 race condition
+  -- 6. 逐項處理品項：FOR UPDATE 鎖定防止 race condition
   for v_item in select * from jsonb_array_elements(p_items)
   loop
     select * into v_product
@@ -455,8 +500,10 @@ begin
     v_total := v_total + v_product.price * (v_item->>'quantity')::int;
   end loop;
 
-  -- 6. 更新總金額
-  update orders set total_amount = v_total where id = v_order_id;
+  -- 7. 更新總金額（商品小計 + 取貨費用）
+  update orders
+  set total_amount = v_total + v_pickup.extra_fee
+  where id = v_order_id;
 
   return v_order_id;
 end;
@@ -544,6 +591,7 @@ export type Permission =
   | 'stats:view'
   | 'staff:manage'
   | 'roles:manage'
+  | 'pickup_options:manage'
 ```
 
 ```typescript
@@ -638,7 +686,7 @@ import { OrderStatus } from '@/types'
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending:           ['in_production', 'cancelled'],
   in_production:     ['pending_payment', 'cancelled'],
-  pending_payment:   ['payment_submitted', 'cancelled'],
+  pending_payment:   ['payment_submitted', 'completed', 'cancelled'], // cash 可直接 → completed
   payment_submitted: ['completed'],
   completed:         [],
   cancelled:         [],
@@ -651,6 +699,23 @@ export function assertTransition(
   const allowed = ALLOWED_TRANSITIONS[current]
   if (!allowed.includes(next)) {
     throw new Error(`INVALID_TRANSITION:${current}->${next}`)
+  }
+}
+
+// 現金付款直接 completed，不需經過 payment_submitted
+// 匯款付款必須先進入 payment_submitted
+export function assertPaymentTransition(
+  current: OrderStatus,
+  next: OrderStatus,
+  paymentMethod: 'bank_transfer' | 'cash'
+): void {
+  assertTransition(current, next)
+  if (
+    paymentMethod === 'bank_transfer' &&
+    current === 'pending_payment' &&
+    next === 'completed'
+  ) {
+    throw new Error('INVALID_TRANSITION:bank_transfer_must_submit_remit_first')
   }
 }
 
@@ -774,6 +839,8 @@ export function errorResponse(code: string, status = 400) {
     CREATE_USER_FAILED:                '建立帳號失敗，請確認 Email 是否已被使用',
     ROLE_NOT_FOUND:                    '找不到此角色',
     CANNOT_DELETE_OWNER_ROLE:          '無法刪除 owner 角色',
+    PICKUP_OPTION_NOT_FOUND:           '取貨方式不存在或已下架',
+    PAYMENT_METHOD_NOT_ALLOWED:        '此取貨方式不支援所選付款方式',
   }
   return Response.json(
     { error: code, message: messages[code] ?? '系統錯誤，請稍後再試' },
@@ -808,7 +875,7 @@ export async function initLiff() {
 
 | 路由 | 說明 |
 |------|------|
-| `/liff/order` | LIFF 訂購頁（商品列表、數量選擇、送出） |
+| `/liff/order` | LIFF 訂購頁（商品選擇 → 取貨方式 → 付款方式 → 確認 → 送出） |
 | `/liff/status` | LIFF 訂單狀態查詢頁 |
 | `/admin/login` | 後台登入頁（Email + 密碼） |
 | `/admin` | 後台首頁（進行中訂單 Dashboard） |
@@ -817,6 +884,7 @@ export async function initLiff() {
 | `/admin/sessions/[id]/stats` | 開單統計 |
 | `/admin/staff` | 人員管理（列表、新增、停用） |
 | `/admin/roles` | 角色管理（列表、新增角色、勾選權限） |
+| `/admin/pickup-options` | 取貨方式管理（列表、新增、編輯、上下架、排序） |
 
 ### 5.3 狀態管理
 
@@ -876,6 +944,8 @@ lib/orderStatus.ts
   ✓ in_production → cancelled：允許
   ✓ pending_payment → payment_submitted：允許
   ✓ pending_payment → cancelled：允許
+  ✓ pending_payment → completed（cash）：允許
+  ✓ pending_payment → completed（bank_transfer）：丟出 INVALID_TRANSITION（須先填後五碼）
   ✓ payment_submitted → completed：允許
   ✓ payment_submitted → cancelled：丟出 CANNOT_CANCEL_PAYMENT_SUBMITTED
   ✓ completed → 任何狀態：丟出 ORDER_ALREADY_FINALIZED
@@ -968,14 +1038,18 @@ describe('assertQuota', () => {
 
 ```
 POST /api/orders（建立訂單）
-  ✓ 正常下單：庫存正確扣除
-  ✓ 正常下單：order_items 正確建立，total_amount 正確
+  ✓ 正常下單（匯款 + 免費自取）：庫存正確扣除，total_amount = 商品小計
+  ✓ 正常下單（匯款 + 宅配費 100）：total_amount = 商品小計 + 100，pickup_fee 快照正確
+  ✓ 正常下單（現金 + 自取）：payment_method = cash，狀態機允許直接 pending_payment → completed
   ✓ 無效 LIFF token：回傳 401
   ✓ session 未開放：回傳 SESSION_NOT_ACTIVE
   ✓ 超過 quota：回傳 QUOTA_EXCEEDED
-  ✓ per_person_limit 為 null：不受 quota 限制，可無限下單
+  ✓ per_person_limit 為 null：不受 quota 限制
   ✓ 庫存不足：回傳 INSUFFICIENT_STOCK
+  ✓ pickup_option 已下架：回傳 PICKUP_OPTION_NOT_FOUND
+  ✓ 選擇現金但取貨方式只允許匯款：回傳 PAYMENT_METHOD_NOT_ALLOWED
   ✓ 同時兩筆訂單搶最後一個庫存：只有一筆成功（race condition）
+  ✓ 修改取貨費用後，舊訂單的 pickup_fee 快照不受影響
 
 PUT /api/orders/:id（修改訂單）
   ✓ pending 狀態可修改，庫存正確更新（舊庫存釋放、新庫存扣除）
@@ -1194,6 +1268,7 @@ jobs:
 | M4 — 後台操作 | 後台進行中訂單管理（接單、取消、完成）+ 登入頁 | 第 4 週 |
 | M5 — 後台報表 | 歷史訂單查詢、CSV 匯出、開單統計 | 第 5 週 |
 | M6 — 人員與角色管理 | 人員帳號管理、角色新增、權限勾選 | 第 6 週 |
+| M7 — 取貨與付款方式 | pickup_options 管理、現金付款流程、LIFF 選購步驟 | 第 7 週 |
 
 ### 8.3 Issues 清單
 
@@ -1298,7 +1373,29 @@ jobs:
 [type: feature][layer: frontend] #071 後台：新增角色表單
 ```
 
-### 8.4 GitHub Project Board 欄位設定
+#### M7 — 取貨方式管理
+
+```
+[chore][layer: db]       #072 Migration 001 更新：pickup_options 表 + orders 新欄位
+[chore][layer: db]       #073 Migration 003 更新：create_order function 支援 pickup_option_id 與 payment_method
+[chore][layer: db]       #074 Migration 004 更新：RBAC seed 新增 pickup_options:manage 權限
+[chore][layer: api]      #075 更新 lib/orderStatus.ts：現金付款路徑（pending_payment → completed）與 assertPaymentTransition
+[type: test]             #076 Unit Test：lib/orderStatus.ts 補充現金付款轉移案例
+[type: feature][layer: api] #077 API：GET /api/pickup-options（客戶選購頁取得 active 選項）
+[type: feature][layer: api] #078 更新 API：POST /api/orders 加入 pickup_option_id + payment_method 參數
+[type: test]             #079 Integration Test：create_order 含取貨費用快照與付款方式驗證全案例
+[type: feature][layer: api] #080 API：GET /admin/pickup-options（assertPermission pickup_options:manage）
+[type: feature][layer: api] #081 API：POST /admin/pickup-options
+[type: feature][layer: api] #082 API：PATCH /admin/pickup-options/:id
+[type: feature][layer: api] #083 API：PATCH /admin/pickup-options/:id/toggle（上下架）
+[type: feature][layer: api] #084 API：PATCH /admin/pickup-options/reorder
+[type: test]             #085 Integration Test：取貨方式管理 API 全案例
+[type: feature][layer: frontend] #086 LIFF 訂購頁：取貨方式選擇步驟（顯示名稱、說明、費用）
+[type: feature][layer: frontend] #087 LIFF 訂購頁：付款方式選擇步驟（依取貨方式過濾可選項）
+[type: feature][layer: frontend] #088 LIFF 訂購頁：確認頁顯示商品小計 + 取貨費用 + 總金額
+[type: feature][layer: frontend] #089 LIFF 訂單查詢頁：依 payment_method 顯示不同付款說明
+[type: feature][layer: frontend] #090 後台：取貨方式管理頁（列表、新增、編輯、上下架、排序）
+```
 
 使用 **GitHub Projects（Table view + Board view）**：
 
@@ -1343,11 +1440,12 @@ PR body 必填：
 | M4 — 後台操作 | 14 | 16 hr |
 | M5 — 後台報表 | 7 | 8 hr |
 | M6 — 人員與角色管理 | 15 | 14 hr |
-| **總計** | **71** | **~76 hr** |
+| M7 — 取貨與付款方式 | 19 | 16 hr |
+| **總計** | **90** | **~92 hr** |
 
-單人每週投入約 10~12 小時，六週完成 MVP 是合理目標。
+單人每週投入約 10~12 小時，七週完成 MVP 是合理目標。
 
-M6 是本版本新增的 Milestone，涵蓋 RBAC 的完整後台 UI（人員管理 + 角色權限勾選），讓老闆無需接觸 Supabase Dashboard 即可自主管理帳號。這部分的工時估算相對寬鬆，因為角色管理頁面的互動較複雜（多對多權限勾選需要特別注意 UX）。
+M7 涉及的異動層面較廣：DB Function 更新、狀態機新增現金路徑、LIFF 訂購頁改為多步驟流程（選商品 → 選取貨 → 選付款 → 確認）、後台取貨方式管理頁。其中 LIFF 多步驟流程的 UX 設計是工時主因，建議優先完成 M1 時同步規劃好前端的步驟狀態管理方式，避免 M2 與 M7 之間重工。
 
 ---
 
@@ -1385,10 +1483,11 @@ user_roles ──── role_id ────→ roles
 | `orders:reject` | 拒絕訂單 | 拒絕待確認訂單 |
 | `orders:mark_ready` | 標記製作完成 | 通知客戶付款 |
 | `orders:cancel` | 取消訂單 | 取消製作中或待付款訂單 |
-| `orders:confirm_payment` | 確認付款 | 確認客戶匯款完成 |
+| `orders:confirm_payment` | 確認付款 | 確認客戶匯款完成或現金收訖 |
 | `stats:view` | 查看報表 | 歷史訂單查詢與開單統計 |
 | `staff:manage` | 管理人員 | 新增、編輯、停用人員帳號 |
 | `roles:manage` | 管理角色權限 | 新增角色、調整角色權限 |
+| `pickup_options:manage` | 管理取貨方式 | 新增、編輯、上下架取貨方式 |
 
 ### 9.4 預設角色權限配置
 
@@ -1404,6 +1503,7 @@ user_roles ──── role_id ────→ roles
 | `stats:view` | ✅ | ✅ |
 | `staff:manage` | ✅ | ❌ |
 | `roles:manage` | ✅ | ❌ |
+| `pickup_options:manage` | ✅ | ❌ |
 
 `owner` 為受保護角色，`roles:manage` 權限不可被移除，防止老闆意外把自己鎖在系統外。
 

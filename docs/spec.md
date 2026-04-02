@@ -1,10 +1,12 @@
 # 甜點工作室訂購系統規格書
 
-**版本：** v1.1  
+**版本：** v1.2  
 **最後更新：** 2025-06  
 **性質：** 個人工作室，非正式公司
 
 **v1.1 異動說明：** 同步 implementation v1.3 的設計決策。新增 RBAC 系統（人員管理、角色管理）、`per_person_limit` 支援 NULL 無上限、後台驗證改為 Supabase Auth + RBAC、開發排程更新至六週。
+
+**v1.2 異動說明：** 新增現金付款方式、取貨方式管理功能。`orders` 表新增 `payment_method`、`pickup_option_id`、`pickup_fee` 欄位；新增 `pickup_options` 表；狀態機補充現金付款可跳過 `payment_submitted`；新增 `pickup_options:manage` 權限項目；開發排程更新至七週。
 
 ---
 
@@ -27,7 +29,7 @@
 
 - 成本最低（目標每月 $0）
 - 客戶不需額外下載 App 或註冊帳號
-- 以現金匯款為主，避免第三方金流報稅問題
+- 以現金或匯款為主，避免第三方金流報稅問題
 - 製作完成後才請款，完全避免退款情境
 
 ---
@@ -108,8 +110,11 @@
 | line_user_id | text | LINE 使用者 ID（防黃牛核心欄位） |
 | line_display_name | text | LINE 顯示名稱 |
 | status | enum | 訂單狀態（見第 4 節） |
-| total_amount | int | 應付總金額（新台幣） |
-| remit_last5 | text | 匯款後五碼 |
+| payment_method | enum | `bank_transfer` \| `cash`，下單時選擇，之後不得修改 |
+| total_amount | int | 應付總金額（商品小計 + 取貨費用，新台幣） |
+| remit_last5 | text | 匯款後五碼（僅 `bank_transfer` 適用） |
+| pickup_option_id | uuid FK | 客戶選擇的取貨方式 |
+| pickup_fee | int | 下單當時的取貨費用快照（防止事後修改費用影響舊訂單） |
 | queue_number | int | 排單號碼 |
 | edit_count | int | 修改次數（預設 0） |
 | last_edited_at | timestamp | 最後修改時間 |
@@ -126,6 +131,19 @@
 | product_id | uuid FK | 商品 |
 | quantity | int | 數量 |
 | unit_price | int | 下單當時單價（快照） |
+
+#### pickup_options（取貨方式）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid PK | 主鍵 |
+| name | text | 選項名稱，例如「自取」、「宅配」 |
+| description | text | 說明文字，例如取貨地點、時間、注意事項 |
+| extra_fee | int | 額外費用（新台幣），`0` 代表免費 |
+| allowed_payment_methods | text[] | 允許的付款方式，`NULL` 代表不限制；例如宅配可限制為 `['bank_transfer']` |
+| is_active | boolean | 是否開放；下架後客戶選購頁不顯示 |
+| sort_order | int | 排列順序（影響客戶端顯示順序） |
+| created_at | timestamp | 建立時間 |
 
 #### roles（後台角色）
 
@@ -177,6 +195,14 @@ WHERE o.session_id = $session_id
 - `completed` → 計入 quota，不重新開放
 - `per_person_limit` 為 `NULL` → 跳過 quota 檢查，不限購
 
+### 3.3 總金額計算
+
+```
+total_amount = Σ(unit_price × quantity) + pickup_fee
+```
+
+`pickup_fee` 於建立訂單時從 `pickup_options.extra_fee` 快照寫入，事後修改取貨方式費用不影響已建立的訂單。
+
 ---
 
 ## 4. 訂單狀態機
@@ -187,24 +213,30 @@ WHERE o.session_id = $session_id
 |------|------|
 | `pending` | 待確認，客戶剛送出訂單 |
 | `in_production` | 製作中，老闆已確認接單並分配排單號 |
-| `pending_payment` | 待付款，製作完成，等待客戶匯款 |
-| `payment_submitted` | 確認付款中，客戶已填入匯款後五碼 |
+| `pending_payment` | 待付款，製作完成，等待客戶付款 |
+| `payment_submitted` | 確認付款中，客戶已填入匯款後五碼（**僅 `bank_transfer` 適用**） |
 | `completed` | 完成取貨 |
 | `cancelled` | 已取消（含客戶自行取消、老闆拒絕、老闆取消） |
 
 ### 4.2 狀態轉移
 
 ```
-pending → in_production     （老闆接單）
-pending → cancelled         （客戶取消 或 老闆拒絕）
-in_production → pending_payment    （老闆標記製作完成）
-in_production → cancelled          （老闆取消）
-pending_payment → payment_submitted（客戶填入匯款後五碼）
-pending_payment → cancelled        （老闆取消）
-payment_submitted → completed      （老闆確認收款）
+pending → in_production               （老闆接單）
+pending → cancelled                   （客戶取消 或 老闆拒絕）
+in_production → pending_payment       （老闆標記製作完成）
+in_production → cancelled             （老闆取消）
+
+── 匯款付款（bank_transfer）──
+pending_payment → payment_submitted   （客戶填入匯款後五碼）
+payment_submitted → completed         （老闆確認收款）
+
+── 現金付款（cash）──
+pending_payment → completed           （老闆當面收現金後直接確認）
+
+pending_payment → cancelled           （老闆取消，兩種付款方式皆適用）
 ```
 
-`payment_submitted` 後不得取消，避免客戶已匯款卻遭取消的糾紛。
+`payment_submitted` 後不得取消，避免客戶已匯款卻遭取消的糾紛。現金訂單不經過此狀態，故無此限制。
 
 ### 4.3 取消連鎖動作（Transaction）
 
@@ -231,14 +263,18 @@ payment_submitted → completed      （老闆確認收款）
 1. 點擊 LINE 群組內的訂購連結
 2. LIFF 開啟，自動取得 LINE ID（無需另外登入）
 3. 系統檢查該 LINE ID 是否超過此 session 每人購買上限
-4. 瀏覽商品，選擇品項與數量，送出訂單
-5. 畫面顯示訂單編號，狀態為「待確認」
-6. **待確認期間**：可回 LIFF 修改品項、數量，或取消訂單
-7. 老闆確認接單後，狀態變為「製作中」，客戶端鎖定，無法再修改
-8. 製作完成後，老闆通知付款（透過 LINE 群組告知）
-9. 客戶至 LIFF 查詢頁，依畫面顯示之帳號完成 ATM / 網銀匯款
-10. 回 LIFF 填入匯款後五碼送出
-11. 老闆確認收款後，訂單狀態變為「完成」
+4. 瀏覽商品，選擇品項與數量
+5. 選擇取貨方式（顯示名稱、說明、費用）
+6. 選擇付款方式（依取貨方式的 `allowed_payment_methods` 過濾可選項）
+7. 確認頁顯示：商品小計 + 取貨費用 + 總金額
+8. 送出訂單，畫面顯示訂單編號，狀態為「待確認」
+9. **待確認期間**：可回 LIFF 修改品項、數量，或取消訂單
+10. 老闆確認接單後，狀態變為「製作中」，客戶端鎖定，無法再修改
+11. 製作完成後，老闆通知付款（透過 LINE 群組告知）
+12. 客戶回 LIFF 查詢頁：
+    - **匯款**：依畫面顯示帳號完成 ATM / 網銀匯款，填入後五碼送出
+    - **現金**：等待老闆當面收款確認
+13. 老闆確認收款後，訂單狀態變為「完成」
 
 ### 5.2 老闆後台流程
 
@@ -255,16 +291,17 @@ payment_submitted → completed      （老闆確認收款）
 
 ## 6. LIFF 訂單查詢頁邏輯
 
-客戶進入後，以 LINE ID 自動查詢訂單並顯示：
+客戶進入後，以 LINE ID 自動查詢訂單並顯示。所有狀態均顯示取貨方式名稱與費用。
 
-| 訂單狀態 | 顯示內容 | 可操作 |
-|----------|----------|--------|
-| `pending` | 訂單編號、品項明細 | 「修改訂單」「取消訂單」按鈕 |
-| `in_production` | 排單號碼、製作中提示 | 無（鎖定） |
-| `pending_payment` | 匯款帳號、應付金額 | 填入匯款後五碼欄位 |
-| `payment_submitted` | 等待老闆確認付款 | 無 |
-| `completed` | 訂單完成 | 無 |
-| `cancelled` | 已取消 / 拒絕原因 | 提供重新下單連結 |
+| 訂單狀態 | 付款方式 | 顯示內容 | 客戶可操作 |
+|----------|---------|---------|-----------|
+| `pending` | 任意 | 訂單編號、品項明細、取貨方式、總金額 | 「修改訂單」「取消訂單」按鈕 |
+| `in_production` | 任意 | 排單號碼、製作中提示 | 無（鎖定） |
+| `pending_payment` | `bank_transfer` | 匯款帳號、應付金額 | 填入匯款後五碼欄位 |
+| `pending_payment` | `cash` | 「請於取貨時付現 NT$XXX」 | 無（等老闆確認） |
+| `payment_submitted` | `bank_transfer` | 等待老闆確認付款 | 無 |
+| `completed` | 任意 | 訂單完成 | 無 |
+| `cancelled` | 任意 | 已取消 / 拒絕原因 | 提供重新下單連結 |
 
 ---
 
@@ -338,6 +375,17 @@ payment_submitted → completed      （老闆確認收款）
 | `stats:view` | 查看報表 |
 | `staff:manage` | 管理人員 |
 | `roles:manage` | 管理角色權限 |
+| `pickup_options:manage` | 管理取貨方式 |
+
+### 7.6 取貨方式管理
+
+具備 `pickup_options:manage` 權限的人員可操作：
+
+- 查看目前所有取貨方式（含費用、說明、狀態）
+- 新增取貨方式（名稱、說明、費用、允許付款方式、排列順序）
+- 編輯取貨方式（費用修改只影響新訂單，舊訂單已快照 `pickup_fee`）
+- 上架 / 下架（切換 `is_active`，下架後客戶選購頁不顯示）
+- 拖曳調整顯示順序
 
 ---
 
@@ -377,6 +425,11 @@ payment_submitted → completed      （老闆確認收款）
 | `/admin/roles` | GET | 取得角色列表（含各角色權限） |
 | `/admin/roles` | POST | 新增角色 |
 | `/admin/roles/:id/permissions` | PATCH | 更新角色的權限配置 |
+| `/admin/pickup-options` | GET | 取得取貨方式列表 |
+| `/admin/pickup-options` | POST | 新增取貨方式 |
+| `/admin/pickup-options/:id` | PATCH | 編輯取貨方式 |
+| `/admin/pickup-options/:id/toggle` | PATCH | 上架 / 下架取貨方式 |
+| `/admin/pickup-options/reorder` | PATCH | 更新排列順序 |
 
 ---
 
@@ -411,9 +464,10 @@ payment_submitted → completed      （老闆確認收款）
 
 | 階段 | 內容 | 目標 |
 |------|------|------|
-| 第一週 | Supabase Schema 建立（含 RBAC 四張表）、RLS 規則、DB Functions、RBAC seed | 地基建好 |
-| 第二週 | LIFF 訂購頁（選購、送出、防黃牛提示） | 客戶可以下單 |
+| 第一週 | Supabase Schema 建立（含 RBAC 四張表、pickup_options）、RLS 規則、DB Functions、RBAC seed | 地基建好 |
+| 第二週 | LIFF 訂購頁（選購、取貨方式、付款方式、防黃牛提示） | 客戶可以下單 |
 | 第三週 | LIFF 訂單查詢頁（狀態顯示、修改、取消、填匯款碼） | 客戶可以自助查詢 |
 | 第四週 | 後台登入頁、進行中訂單管理（接單、拒絕、完成、取消） | 老闆可以操作 |
 | 第五週 | 後台歷史訂單查詢、CSV 匯出、開單統計 | 完整後台 |
 | 第六週 | 後台人員管理、角色管理與權限勾選 | 老闆自主管理帳號 |
+| 第七週 | 後台取貨方式管理（新增、編輯、上下架、排序） | 老闆自主管理取貨選項 |
