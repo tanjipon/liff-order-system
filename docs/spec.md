@@ -1,12 +1,14 @@
 # 甜點工作室訂購系統規格書
 
-**版本：** v1.2  
+**版本：** v1.3  
 **最後更新：** 2025-06  
 **性質：** 個人工作室，非正式公司
 
 **v1.1 異動說明：** 同步 implementation v1.3 的設計決策。新增 RBAC 系統（人員管理、角色管理）、`per_person_limit` 支援 NULL 無上限、後台驗證改為 Supabase Auth + RBAC、開發排程更新至六週。
 
 **v1.2 異動說明：** 新增現金付款方式、取貨方式管理功能。`orders` 表新增 `payment_method`、`pickup_option_id`、`pickup_fee` 欄位；新增 `pickup_options` 表；狀態機補充現金付款可跳過 `payment_submitted`；新增 `pickup_options:manage` 權限項目；開發排程更新至七週。
+
+**v1.3 異動說明：** 新增 Session 預設開搶時間與追加庫存排程功能。`sessions` 表的 `opens_at` / `closes_at` 正式驅動開放判斷邏輯，不再依賴純手動的 `is_active`；新增 `session_restocks` 與 `restock_items` 兩張表；`create_order` DB Function 於下單前惰性套用到期的 restock；後台新增追加庫存排程 UI；LIFF 客戶端顯示倒數與追加庫存預告；新增 `restocks:manage` 權限項目；開發排程更新至八週。
 
 ---
 
@@ -66,8 +68,11 @@
 資料層（Supabase PostgreSQL）
     ├── sessions（開單紀錄）
     ├── products（商品資料）
+    ├── session_restocks（追加庫存排程）
+    ├── restock_items（追加庫存品項）
     ├── orders（訂單紀錄）
     ├── order_items（訂單品項）
+    ├── pickup_options（取貨方式）
     ├── roles（後台角色定義）
     ├── permissions（後台權限項目）
     ├── role_permissions（角色與權限對應）
@@ -86,10 +91,12 @@
 |------|------|------|
 | id | uuid PK | 主鍵 |
 | title | text | 開單名稱，例如「六月草莓塔開單」 |
-| opens_at | timestamp | 開放訂購時間 |
-| closes_at | timestamp | 截止訂購時間 |
-| is_active | boolean | 是否開放中 |
+| opens_at | timestamp | 開始訂購時間；`NULL` 代表立即開放；到時間前客戶看到倒數 |
+| closes_at | timestamp | 截止訂購時間；`NULL` 代表不設截止 |
+| is_active | boolean | 老闆是否批准此開單（緊急關閉用）；`false` 時無論時間為何皆不開放 |
 | per_person_limit | int | 每人購買上限（件數）；`NULL` 表示無上限 |
+
+**開放判斷邏輯：** session 對客戶開放的條件為 `is_active = true` 且 `now()` 在 `opens_at` 至 `closes_at` 的區間內（`NULL` 的欄位視為無限制）。
 
 #### products（商品）
 
@@ -144,6 +151,25 @@
 | is_active | boolean | 是否開放；下架後客戶選購頁不顯示 |
 | sort_order | int | 排列順序（影響客戶端顯示順序） |
 | created_at | timestamp | 建立時間 |
+
+#### session_restocks（追加庫存排程）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid PK | 主鍵 |
+| session_id | uuid FK | 所屬開單批次 |
+| opens_at | timestamp | 此波庫存開放搶購時間 |
+| is_active | boolean | 老闆是否啟用此波排程（可取消） |
+| applied | boolean | 是否已套用至 `products.stock_qty`（套用後不可取消） |
+| created_at | timestamp | 建立時間 |
+
+#### restock_items（追加庫存品項）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| restock_id | uuid FK PK | 所屬追加庫存排程 |
+| product_id | uuid FK PK | 商品 |
+| quantity | int | 追加數量 |
 
 #### roles（後台角色）
 
@@ -262,30 +288,33 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 
 1. 點擊 LINE 群組內的訂購連結
 2. LIFF 開啟，自動取得 LINE ID（無需另外登入）
-3. 系統檢查該 LINE ID 是否超過此 session 每人購買上限
-4. 瀏覽商品，選擇品項與數量
-5. 選擇取貨方式（顯示名稱、說明、費用）
-6. 選擇付款方式（依取貨方式的 `allowed_payment_methods` 過濾可選項）
-7. 確認頁顯示：商品小計 + 取貨費用 + 總金額
-8. 送出訂單，畫面顯示訂單編號，狀態為「待確認」
-9. **待確認期間**：可回 LIFF 修改品項、數量，或取消訂單
-10. 老闆確認接單後，狀態變為「製作中」，客戶端鎖定，無法再修改
-11. 製作完成後，老闆通知付款（透過 LINE 群組告知）
-12. 客戶回 LIFF 查詢頁：
+3. 若 session 尚未到 `opens_at`，顯示倒數計時，商品清單可見但無法送出
+4. 開搶時間到後按鈕自動解鎖，系統檢查 LINE ID 是否超過購買上限
+5. 瀏覽商品，選擇品項與數量（庫存為 0 時，若有排程中的 restock 顯示「追加庫存將於 XX:XX 開放」）
+6. 選擇取貨方式（顯示名稱、說明、費用）
+7. 選擇付款方式（依取貨方式的 `allowed_payment_methods` 過濾可選項）
+8. 確認頁顯示：商品小計 + 取貨費用 + 總金額
+9. 送出訂單，畫面顯示訂單編號，狀態為「待確認」
+10. **待確認期間**：可回 LIFF 修改品項、數量，或取消訂單
+11. 老闆確認接單後，狀態變為「製作中」，客戶端鎖定，無法再修改
+12. 製作完成後，老闆通知付款（透過 LINE 群組告知）
+13. 客戶回 LIFF 查詢頁：
     - **匯款**：依畫面顯示帳號完成 ATM / 網銀匯款，填入後五碼送出
     - **現金**：等待老闆當面收款確認
-13. 老闆確認收款後，訂單狀態變為「完成」
+14. 老闆確認收款後，訂單狀態變為「完成」
 
 ### 5.2 老闆後台流程
 
-1. 新增 session（開單名稱、品項、庫存、每人限購）
-2. 複製 LIFF 連結，貼至 LINE 群組開放訂購
-3. 後台查看「待確認」訂單列表，審核產能
-4. 逐筆點擊「接單」（→ `in_production`，系統分配排單號）或「拒絕」（→ `cancelled`）
-5. 完成製作後，點擊「製作完成，通知付款」（→ `pending_payment`）
-6. 等待客戶填入匯款後五碼
-7. 核對銀行帳戶明細，確認後點擊「確認收款」（→ `completed`）
-8. 若需取消（`in_production` 或 `pending_payment`），填寫原因後取消，系統自動釋放庫存與 quota
+1. 新增 session（開單名稱、品項、庫存、每人限購、**開搶時間**）
+2. 複製 LIFF 連結，提前貼至 LINE 群組，客戶可看到倒數
+3. 到開搶時間後，系統自動開放下單（`opens_at <= now()`）
+4. 後台查看「待確認」訂單列表，審核產能
+5. 逐筆點擊「接單」（→ `in_production`，系統分配排單號）或「拒絕」（→ `cancelled`）
+6. 完成製作後，點擊「製作完成，通知付款」（→ `pending_payment`）
+7. 等待客戶填入匯款後五碼 / 現場收現
+8. 核對確認後點擊「確認收款」（→ `completed`）
+9. 若需取消（`in_production` 或 `pending_payment`），填寫原因後取消，系統自動釋放庫存與 quota
+10. **若需追加庫存**：在開單詳情頁新增追加庫存排程，設定開搶時間與各商品追加數量；時間到後第一筆下單自動觸發套用
 
 ---
 
@@ -376,6 +405,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | `staff:manage` | 管理人員 |
 | `roles:manage` | 管理角色權限 |
 | `pickup_options:manage` | 管理取貨方式 |
+| `restocks:manage` | 管理追加庫存排程 |
 
 ### 7.6 取貨方式管理
 
@@ -387,6 +417,24 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 - 上架 / 下架（切換 `is_active`，下架後客戶選購頁不顯示）
 - 拖曳調整顯示順序
 
+### 7.7 追加庫存排程管理
+
+具備 `restocks:manage` 權限的人員可操作。入口位於**開單詳情頁**，與商品列表整合：
+
+**查看排程：** 顯示此 session 所有追加庫存排程，含開搶時間、各商品追加數量、狀態。
+
+| 狀態 | 說明 |
+|------|------|
+| 待套用 | `applied = false`，時間尚未到，可取消 |
+| 已套用 | `applied = true`，已自動觸發寫入庫存，唯讀 |
+| 已取消 | `is_active = false`，不可恢復 |
+
+**新增排程：** 填寫開搶時間、各商品追加數量（留空代表不追加），儲存後顯示「待套用」。
+
+**取消排程：** 僅限「待套用」狀態。套用後不可取消。
+
+**套用機制：** 不依賴 cron job，由下單行為惰性觸發。當客戶下單時，`create_order` 在庫存扣除前自動套用所有時間已到且未套用的 restock。若庫存到期後無人下單，restock 停留在「待套用」，不影響系統運作。
+
 ---
 
 ## 8. API 端點
@@ -395,7 +443,8 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 
 | 端點 | 方法 | 說明 |
 |------|------|------|
-| `/sessions/active` | GET | 取得目前開放的 session |
+| `/sessions/active` | GET | 取得目前開放或即將開放的 session（含 `opens_at` 供前端倒數） |
+| `/sessions/:id/restocks` | GET | 取得此 session 排程中（待套用）的 restock 預告，供 LIFF 顯示追加庫存提示 |
 | `/orders` | POST | 建立新訂單 |
 | `/orders?line_user_id=xxx` | GET | 查詢自己的訂單列表 |
 | `/orders/:id/remit` | PATCH | 填入匯款後五碼 |
@@ -430,6 +479,9 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | `/admin/pickup-options/:id` | PATCH | 編輯取貨方式 |
 | `/admin/pickup-options/:id/toggle` | PATCH | 上架 / 下架取貨方式 |
 | `/admin/pickup-options/reorder` | PATCH | 更新排列順序 |
+| `/admin/sessions/:id/restocks` | GET | 取得此 session 所有 restock 排程 |
+| `/admin/sessions/:id/restocks` | POST | 新增追加庫存排程 |
+| `/admin/restocks/:id` | DELETE | 取消尚未套用的 restock 排程 |
 
 ---
 
@@ -456,7 +508,8 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 
 ### 9.4 庫存一致性
 
-- 所有涉及庫存變更的操作（新增訂單、修改訂單、取消訂單）皆以資料庫 transaction 執行，避免超賣
+- 所有涉及庫存變更的操作（新增訂單、修改訂單、取消訂單、套用 restock）皆以資料庫 transaction 執行，避免超賣
+- Restock 套用於 `create_order` 內，使用 `FOR UPDATE` 鎖定相關商品列，確保多人同時下單時不重複套用
 
 ---
 
@@ -464,10 +517,11 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 
 | 階段 | 內容 | 目標 |
 |------|------|------|
-| 第一週 | Supabase Schema 建立（含 RBAC 四張表、pickup_options）、RLS 規則、DB Functions、RBAC seed | 地基建好 |
-| 第二週 | LIFF 訂購頁（選購、取貨方式、付款方式、防黃牛提示） | 客戶可以下單 |
+| 第一週 | Supabase Schema 建立（含 RBAC、pickup_options、session_restocks）、RLS 規則、DB Functions、RBAC seed | 地基建好 |
+| 第二週 | LIFF 訂購頁（選購、取貨方式、付款方式、防黃牛提示、倒數 UI） | 客戶可以下單 |
 | 第三週 | LIFF 訂單查詢頁（狀態顯示、修改、取消、填匯款碼） | 客戶可以自助查詢 |
 | 第四週 | 後台登入頁、進行中訂單管理（接單、拒絕、完成、取消） | 老闆可以操作 |
 | 第五週 | 後台歷史訂單查詢、CSV 匯出、開單統計 | 完整後台 |
 | 第六週 | 後台人員管理、角色管理與權限勾選 | 老闆自主管理帳號 |
 | 第七週 | 後台取貨方式管理（新增、編輯、上下架、排序） | 老闆自主管理取貨選項 |
+| 第八週 | 後台追加庫存排程管理（新增、查看、取消）、LIFF 追加庫存提示 | 老闆可排程追加庫存 |

@@ -1,7 +1,7 @@
 # 甜點工作室訂購系統｜實作細節與 GitHub Project 規劃
 
-**版本：** v1.4  
-**依據：** dessert-shop-spec.md v1.2  
+**版本：** v1.5  
+**依據：** dessert-shop-spec.md v1.3  
 **原則：** 最佳軟體工程實踐、單人開發、零成本部署
 
 **v1.1 異動說明：** 依據 DB Function vs Backend Logic 分析結果，調整業務邏輯分層。僅保留真正需要原子性保證的操作於 DB Function（`create_order`、`admin_cancel_order`），其餘狀態轉移邏輯移至 Backend，提升可讀性與可測試性。
@@ -11,6 +11,8 @@
 **v1.3 異動說明：** 導入資料庫驅動的 RBAC 系統。新增 `roles`、`permissions`、`role_permissions`、`user_roles` 四張表，取代原本的 shared secret 驗證。後台新增人員管理與角色權限管理功能，讓老闆可自行在後台管理帳號與角色，IT 僅需負責初始設定。新增 M6 Milestone 負責人員與角色管理功能。
 
 **v1.4 異動說明：** 新增現金付款方式與取貨方式管理功能。`orders` 表新增 `payment_method`、`pickup_option_id`、`pickup_fee` 三個欄位；新增 `pickup_options` 表；`create_order` DB Function 更新以支援取貨費用快照；狀態機新增現金付款跳過 `payment_submitted` 的路徑；RBAC seed 新增 `pickup_options:manage` 權限；新增 M7 Milestone。
+
+**v1.5 異動說明：** 新增 Session 預設開搶時間與追加庫存排程功能。Session 開放判斷改為時間條件驅動（`opens_at / closes_at`）；新增 `session_restocks` 與 `restock_items` 表；`create_order` DB Function 於庫存扣除前惰性套用到期 restock；RBAC seed 新增 `restocks:manage` 權限；新增 M8 Milestone。
 
 ---
 
@@ -222,6 +224,28 @@ create table pickup_options (
 
 create index idx_pickup_options_active on pickup_options(is_active, sort_order);
 
+-- session_restocks（追加庫存排程）
+create table session_restocks (
+  id         uuid primary key default uuid_generate_v4(),
+  session_id uuid not null references sessions(id) on delete cascade,
+  opens_at   timestamptz not null,
+  is_active  boolean not null default true,   -- false = 老闆取消
+  applied    boolean not null default false,  -- true = 已套用，不可取消
+  created_at timestamptz not null default now()
+);
+
+-- restock_items（追加庫存品項）
+create table restock_items (
+  restock_id uuid not null references session_restocks(id) on delete cascade,
+  product_id uuid not null references products(id),
+  quantity   int not null check (quantity > 0),
+  primary key (restock_id, product_id)
+);
+
+create index idx_restocks_session_pending
+  on session_restocks(session_id, opens_at)
+  where is_active = true and applied = false;
+
 -- index: 常用查詢加速
 create index idx_orders_session_line on orders(session_id, line_user_id);
 create index idx_orders_status on orders(status);
@@ -365,7 +389,8 @@ insert into permissions (id, key, name) values
   ('10000000-0000-0000-0000-000000000008', 'stats:view',               '查看報表'),
   ('10000000-0000-0000-0000-000000000009', 'staff:manage',             '管理人員'),
   ('10000000-0000-0000-0000-000000000010', 'roles:manage',             '管理角色權限'),
-  ('10000000-0000-0000-0000-000000000011', 'pickup_options:manage',    '管理取貨方式');
+  ('10000000-0000-0000-0000-000000000011', 'pickup_options:manage',    '管理取貨方式'),
+  ('10000000-0000-0000-0000-000000000012', 'restocks:manage',          '管理追加庫存排程');
 
 -- 3. 設定 owner 擁有所有權限
 insert into role_permissions (role_id, permission_id)
@@ -404,7 +429,7 @@ create or replace function create_order(
   p_session_id       uuid,
   p_line_user_id     text,
   p_display_name     text,
-  p_items            jsonb,           -- [{product_id, quantity}]
+  p_items            jsonb,
   p_pickup_option_id uuid,
   p_payment_method   payment_method_enum
 ) returns uuid language plpgsql as $$
@@ -417,10 +442,15 @@ declare
   v_item          jsonb;
   v_product       record;
   v_pickup        record;
+  v_restock       record;
 begin
-  -- 1. 檢查 session 是否開放，取得 per_person_limit（可為 NULL）
+  -- 1. 檢查 session 是否開放（時間條件 + is_active 雙重驗證）
   select per_person_limit into v_quota_limit
-  from sessions where id = p_session_id and is_active = true;
+  from sessions
+  where id = p_session_id
+    and is_active = true
+    and (opens_at is null or opens_at <= now())
+    and (closes_at is null or closes_at >= now());
   if not found then
     raise exception 'SESSION_NOT_ACTIVE';
   end if;
@@ -457,7 +487,31 @@ begin
     end if;
   end if;
 
-  -- 5. 建立訂單（含 pickup_fee 快照）
+  -- 5. 惰性套用到期的 restock（FOR UPDATE 鎖定，避免重複套用）
+  for v_restock in
+    select sr.id
+    from session_restocks sr
+    where sr.session_id = p_session_id
+      and sr.is_active = true
+      and sr.applied = false
+      and sr.opens_at <= now()
+    order by sr.opens_at
+    for update of sr
+  loop
+    -- 將此 restock 的追加數量加回各商品庫存
+    update products p
+    set stock_qty = p.stock_qty + ri.quantity
+    from restock_items ri
+    where ri.restock_id = v_restock.id
+      and ri.product_id = p.id;
+
+    -- 標記已套用
+    update session_restocks
+    set applied = true
+    where id = v_restock.id;
+  end loop;
+
+  -- 6. 建立訂單（含 pickup_fee 快照）
   insert into orders (
     session_id, line_user_id, line_display_name,
     payment_method, pickup_option_id, pickup_fee
@@ -468,7 +522,7 @@ begin
   )
   returning id into v_order_id;
 
-  -- 6. 逐項處理品項：FOR UPDATE 鎖定防止 race condition
+  -- 7. 逐項處理品項：FOR UPDATE 鎖定防止 race condition
   for v_item in select * from jsonb_array_elements(p_items)
   loop
     select * into v_product
@@ -500,7 +554,7 @@ begin
     v_total := v_total + v_product.price * (v_item->>'quantity')::int;
   end loop;
 
-  -- 7. 更新總金額（商品小計 + 取貨費用）
+  -- 8. 更新總金額（商品小計 + 取貨費用）
   update orders
   set total_amount = v_total + v_pickup.extra_fee
   where id = v_order_id;
@@ -579,7 +633,6 @@ export async function verifyLiffToken(req: NextRequest) {
 
 ```typescript
 // lib/auth/permissions.ts
-// 所有 permission key 的型別定義，與 Migration 004 的資料保持一致
 export type Permission =
   | 'sessions:create'
   | 'sessions:edit'
@@ -592,6 +645,7 @@ export type Permission =
   | 'staff:manage'
   | 'roles:manage'
   | 'pickup_options:manage'
+  | 'restocks:manage'
 ```
 
 ```typescript
@@ -841,6 +895,8 @@ export function errorResponse(code: string, status = 400) {
     CANNOT_DELETE_OWNER_ROLE:          '無法刪除 owner 角色',
     PICKUP_OPTION_NOT_FOUND:           '取貨方式不存在或已下架',
     PAYMENT_METHOD_NOT_ALLOWED:        '此取貨方式不支援所選付款方式',
+    RESTOCK_NOT_FOUND:                 '找不到此追加庫存排程',
+    RESTOCK_ALREADY_APPLIED:           '此追加庫存已套用，無法取消',
   }
   return Response.json(
     { error: code, message: messages[code] ?? '系統錯誤，請稍後再試' },
@@ -884,6 +940,7 @@ export async function initLiff() {
 | `/admin/sessions/[id]/stats` | 開單統計 |
 | `/admin/staff` | 人員管理（列表、新增、停用） |
 | `/admin/roles` | 角色管理（列表、新增角色、勾選權限） |
+| `/admin/sessions/[id]` | 開單詳情（含商品列表、追加庫存排程區塊） |
 | `/admin/pickup-options` | 取貨方式管理（列表、新增、編輯、上下架、排序） |
 
 ### 5.3 狀態管理
@@ -1042,13 +1099,17 @@ POST /api/orders（建立訂單）
   ✓ 正常下單（匯款 + 宅配費 100）：total_amount = 商品小計 + 100，pickup_fee 快照正確
   ✓ 正常下單（現金 + 自取）：payment_method = cash，狀態機允許直接 pending_payment → completed
   ✓ 無效 LIFF token：回傳 401
-  ✓ session 未開放：回傳 SESSION_NOT_ACTIVE
+  ✓ session 未開放（is_active = false）：回傳 SESSION_NOT_ACTIVE
+  ✓ session opens_at 尚未到：回傳 SESSION_NOT_ACTIVE
+  ✓ session closes_at 已過：回傳 SESSION_NOT_ACTIVE
   ✓ 超過 quota：回傳 QUOTA_EXCEEDED
   ✓ per_person_limit 為 null：不受 quota 限制
-  ✓ 庫存不足：回傳 INSUFFICIENT_STOCK
+  ✓ 庫存不足，但有到期 restock：restock 套用後庫存補充，下單成功
+  ✓ 庫存不足，restock 尚未到期：回傳 INSUFFICIENT_STOCK
   ✓ pickup_option 已下架：回傳 PICKUP_OPTION_NOT_FOUND
   ✓ 選擇現金但取貨方式只允許匯款：回傳 PAYMENT_METHOD_NOT_ALLOWED
   ✓ 同時兩筆訂單搶最後一個庫存：只有一筆成功（race condition）
+  ✓ 同時兩筆訂單觸發同一 restock：restock 只套用一次（FOR UPDATE 保護）
   ✓ 修改取貨費用後，舊訂單的 pickup_fee 快照不受影響
 
 PUT /api/orders/:id（修改訂單）
@@ -1269,6 +1330,7 @@ jobs:
 | M5 — 後台報表 | 歷史訂單查詢、CSV 匯出、開單統計 | 第 5 週 |
 | M6 — 人員與角色管理 | 人員帳號管理、角色新增、權限勾選 | 第 6 週 |
 | M7 — 取貨與付款方式 | pickup_options 管理、現金付款流程、LIFF 選購步驟 | 第 7 週 |
+| M8 — 開搶時間與追加庫存 | Session 時間條件開放、restock 排程、倒數 UI、追加庫存預告 | 第 8 週 |
 
 ### 8.3 Issues 清單
 
@@ -1397,7 +1459,24 @@ jobs:
 [type: feature][layer: frontend] #090 後台：取貨方式管理頁（列表、新增、編輯、上下架、排序）
 ```
 
-使用 **GitHub Projects（Table view + Board view）**：
+#### M8 — 開搶時間與追加庫存排程
+
+```
+[chore][layer: db]       #091 Migration 001 更新：session_restocks 與 restock_items 表
+[chore][layer: db]       #092 Migration 003 更新：create_order function 加入時間條件驗證與 restock 惰性套用
+[chore][layer: db]       #093 Migration 004 更新：RBAC seed 新增 restocks:manage 權限
+[type: feature][layer: api] #094 更新 API：GET /api/sessions/active 回傳 opens_at 供前端倒數
+[type: feature][layer: api] #095 API：GET /api/sessions/:id/restocks（客戶端取得待套用 restock 預告）
+[type: feature][layer: api] #096 API：GET /admin/sessions/:id/restocks（assertPermission restocks:manage）
+[type: feature][layer: api] #097 API：POST /admin/sessions/:id/restocks（新增追加庫存排程）
+[type: feature][layer: api] #098 API：DELETE /admin/restocks/:id（取消待套用排程，applied = false 才允許）
+[type: test]             #099 Integration Test：create_order 時間條件驗證全案例（opens_at 未到 / 已過 closes_at）
+[type: test]             #100 Integration Test：restock 惰性套用全案例（正常套用 / 並發不重複套用 / applied 後無法取消）
+[type: feature][layer: frontend] #101 後台：新增開單表單加入開搶時間欄位
+[type: feature][layer: frontend] #102 後台：開單詳情頁追加庫存排程區塊（列表、新增、取消）
+[type: feature][layer: frontend] #103 LIFF 訂購頁：開搶倒數 UI（時間到自動解鎖送出按鈕）
+[type: feature][layer: frontend] #104 LIFF 訂購頁：庫存 0 時顯示追加庫存預告時間
+```
 
 **Board View 欄位（Kanban）：**
 
@@ -1410,7 +1489,7 @@ Backlog → In Progress → In Review → Done
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | Title | text | Issue 標題 |
-| Milestone | milestone | M1 ~ M6 |
+| Milestone | milestone | M1 ~ M8 |
 | Layer | single select | db / api / frontend / infra |
 | Priority | single select | high / normal / low |
 | Status | single select | Backlog / In Progress / In Review / Done |
@@ -1441,11 +1520,12 @@ PR body 必填：
 | M5 — 後台報表 | 7 | 8 hr |
 | M6 — 人員與角色管理 | 15 | 14 hr |
 | M7 — 取貨與付款方式 | 19 | 16 hr |
-| **總計** | **90** | **~92 hr** |
+| M8 — 開搶時間與追加庫存 | 14 | 14 hr |
+| **總計** | **104** | **~106 hr** |
 
-單人每週投入約 10~12 小時，七週完成 MVP 是合理目標。
+單人每週投入約 10~12 小時，八週完成 MVP 是合理目標。
 
-M7 涉及的異動層面較廣：DB Function 更新、狀態機新增現金路徑、LIFF 訂購頁改為多步驟流程（選商品 → 選取貨 → 選付款 → 確認）、後台取貨方式管理頁。其中 LIFF 多步驟流程的 UX 設計是工時主因，建議優先完成 M1 時同步規劃好前端的步驟狀態管理方式，避免 M2 與 M7 之間重工。
+M8 的核心複雜度在 `create_order` DB Function 的更新：session 時間條件驗證、restock 惰性套用，以及確保高並發下 restock 不重複套用的 `FOR UPDATE` 鎖定。建議 M8 的 Integration Test（#099、#100）在 DB Function 完成後立即撰寫，避免邊界條件被遺漏。前端的倒數 UI（#103）在 M2 時可先留空位，M8 時填入即可，不需重構。
 
 ---
 
@@ -1488,6 +1568,7 @@ user_roles ──── role_id ────→ roles
 | `staff:manage` | 管理人員 | 新增、編輯、停用人員帳號 |
 | `roles:manage` | 管理角色權限 | 新增角色、調整角色權限 |
 | `pickup_options:manage` | 管理取貨方式 | 新增、編輯、上下架取貨方式 |
+| `restocks:manage` | 管理追加庫存排程 | 新增、查看、取消追加庫存排程 |
 
 ### 9.4 預設角色權限配置
 
@@ -1504,6 +1585,7 @@ user_roles ──── role_id ────→ roles
 | `staff:manage` | ✅ | ❌ |
 | `roles:manage` | ✅ | ❌ |
 | `pickup_options:manage` | ✅ | ❌ |
+| `restocks:manage` | ✅ | ❌ |
 
 `owner` 為受保護角色，`roles:manage` 權限不可被移除，防止老闆意外把自己鎖在系統外。
 
