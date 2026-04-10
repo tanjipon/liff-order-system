@@ -1,0 +1,13 @@
+export type Permissions = 
+    | 'sessions:create'
+    | 'sessions:edit'
+    | 'orders:accept'
+    | 'orders:reject'
+    | 'orders:mark_ready'
+    | 'orders:cancel'
+    | 'orders:confirm_payment'
+    | 'stats:view'
+    | 'staff:manage'
+    | 'roles:manage'
+    | 'pickup_options:manage'
+    | 'restocks:manage'
