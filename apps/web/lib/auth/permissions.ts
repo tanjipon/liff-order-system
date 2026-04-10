@@ -1,4 +1,4 @@
-export type Permissions = 
+export type Permission = 
     | 'sessions:create'
     | 'sessions:edit'
     | 'orders:accept'
