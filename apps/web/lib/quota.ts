@@ -2,7 +2,7 @@ type OrderSnapshot = { status: string; quantity: number }
 
 export function calcQuotaUsed(orders: OrderSnapshot[]): number {
     return orders
-        .filter(o => o.status !== 'canclled')
+        .filter(o => o.status !== 'cancelled')
         .reduce((sum, o) => sum + o.quantity, 0)
 }
 
