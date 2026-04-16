@@ -34,7 +34,7 @@ jobs:
 
       - name: Run tests
         run: npm run test
-        working- directory: apps/web
+        working-directory: apps/web
         env:
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
           SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_LOCAL_SERVICE_KEY }}
