@@ -30,7 +30,7 @@ jobs:
           version: latest
 
       - name: Start local supabase
-        run: supabase Start
+        run: supabase start
 
       - name: Run tests
         run: npm run test
