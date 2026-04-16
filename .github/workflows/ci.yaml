@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branched: [main]
+    branches: [main]
 
 jobs:
   lint-and-test:
@@ -29,12 +29,15 @@ jobs:
         with:
           version: latest
 
-      - name: Start local supabase
+      - name: Start local Supabase
         run: supabase start
+
+      - name: Export Supabase credentials
+        run: supabase status --output env >> $GITHUB_ENV
 
       - name: Run tests
         run: npm run test
         working-directory: apps/web
         env:
-          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
-          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_LOCAL_SERVICE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.API_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SERVICE_ROLE_KEY }}
