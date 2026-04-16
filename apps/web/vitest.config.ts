@@ -8,5 +8,6 @@ export default defineConfig({
         environment: 'node',
         include: ['__tests__/**/*.test.ts'],
         setupFiles: ['__tests__/integration/setup.ts'],
+        fileParallelism: false,
     }
 })
