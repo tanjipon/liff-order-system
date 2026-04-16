@@ -32,11 +32,8 @@ jobs:
       - name: Start local Supabase
         run: supabase start
 
-      - name: Debug Supabase status
-        run: supabase status --output env
-
       - name: Export Supabase credentials
-        run: supabase status --output env >> $GITHUB_ENV
+        run: supabase status --output env | sed 's/"//g' >> $GITHUB_ENV
 
       - name: Run tests
         run: npm run test
