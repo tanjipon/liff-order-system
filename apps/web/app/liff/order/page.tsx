@@ -65,7 +65,7 @@ export default function OderPage() {
                 <div className={`text-sm mb-4 p-2 rounded ${
                     totalItems >= session.per_person_limit
                         ? 'bg-red-50 text-red-600'
-                        : 'bg-grey-50 text-gray-500'
+                        : 'bg-gray-50 text-gray-500'
                 }`}>
                     每人限購 {session.per_person_limit} 件
                     已選 {totalItems} 件
@@ -80,7 +80,7 @@ export default function OderPage() {
                             <p className="text-sm text-gray-500">NT$ {product.price}</p>
                             <p className="text-xs text-gray-400">庫存 {product.stock_qty}</p>
                         </div>
-                        <div className='flex items-cneter gap-2'>
+                        <div className='flex items-center gap-2'>
                             <button
                                 onClick={() => updateQuantity(product.id, -1, product.stock_qty)}
                                 className="w-8 h-8 rounded-full border text-lg"
