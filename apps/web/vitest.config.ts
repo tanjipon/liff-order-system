@@ -7,6 +7,7 @@ export default defineConfig({
     test: {
         environment: 'node',
         include: ['__tests__/**/*.test.ts'],
+        exclude: ['__tests__/e2e/**'],
         setupFiles: ['__tests__/integration/setup.ts'],
         fileParallelism: false,
     }
