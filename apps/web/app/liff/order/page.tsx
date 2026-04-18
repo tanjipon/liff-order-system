@@ -117,7 +117,11 @@ export default function OderPage() {
 
             <div className="space-y-4">
                 {session.products.map(product => (
-                    <div key={product.id} className="flex items-center justify-between border rounded p-3">
+                    <div 
+                        key={product.id} 
+                        className="flex items-center justify-between border rounded p-3"
+                        data-testid={`product-${product.id}`}
+                    >
                         <div>
                             <p className="font-medium">{product.name}</p>
                             <p className="text-sm text-gray-500">NT$ {product.price}</p>
