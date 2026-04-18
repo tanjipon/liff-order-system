@@ -2,7 +2,7 @@
 insert into sessions (id, title, opens_at, closes_at, is_active, per_person_limit) values
     (
         'aaaaaaaa-0000-0000-0000-000000000001',
-        '4月塔甜點開單',
+        '4月甜點開單',
         now() - interval '1 hour',
         now() + interval '7 days',
         true,
