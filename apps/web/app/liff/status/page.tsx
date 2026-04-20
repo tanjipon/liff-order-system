@@ -50,6 +50,9 @@ export default function StatusPage() {
 
     const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null)
 
+    const [remitInputs, setRemitInputs] = useState<Record<string, string>>({})
+    const [remitSubmitting, setRemitSubmitting] = useState(false)
+
     useEffect(() => {
         fetch('/api/orders', {
             headers: { 'x-liff-token': 'mock-token' }
@@ -127,6 +130,35 @@ export default function StatusPage() {
         } finally {
             setSubmitting(false)
             setCancellingOrderId(null)
+        }
+    }
+
+    async function submitRemit(orderId: string) {
+        const remitLast5 = remitInputs[orderId]?.trim()
+        if (!remitLast5 || remitLast5.length != 5) return
+
+        setRemitSubmitting(true)
+        try {
+            const res = await fetch(`/api/orders/${orderId}/remit`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-liff-token': 'mock-token'
+                },
+                body: JSON.stringify({ remitLast5 })
+            })
+
+            if (!res.ok) {
+                const body = await res.json()
+                console.log('remit error:', body)  // 加這行
+                throw new Error(body.message ?? '送出失敗')
+            }
+
+            window.location.reload()
+        } catch (e: any) {
+            setError(e.message)
+        } finally {
+            setRemitSubmitting(false)
         }
     }
 
@@ -246,7 +278,38 @@ export default function StatusPage() {
                             <p className="text-xs text-blue-500">店家已接單，正在為您製作</p>
                         )}
                         {order.status === 'pending_payment' && (
-                            <p className="text-xs text-orange-500">製作完成！請完成付款</p>
+                            <div className="space-y-2">
+                                <p className="text-sm font-medium text-orange-500">製作完成！請完成付款</p>
+
+                                {/* 匯款資訊 */}
+                                <div className="bg-orange-50 rounded p-3 text-sm space-y-1">
+                                    <p>銀行代碼：{process.env.NEXT_PUBLIC_BANK_CODE}</p>
+                                    <p>帳號：{process.env.NEXT_PUBLIC_BANK_ACCOUNT}</p>
+                                    <p>戶名：{process.env.NEXT_PUBLIC_BANK_HOLDER}</p>
+                                    <p className="font-bold text-orange-600">匯款金額：NT$ {order.total_amount}</p>
+                                </div>
+
+                                {/* 填入後五碼 */}
+                                <div className="space-y-2">
+                                    <p className="text-sm text-gray-600">匯款完成後，請填入帳號後五碼：</p>
+                                    <input
+                                        type="text"
+                                        maxLength={5}
+                                        placeholder="例如：12345"
+                                        value={remitInputs[order.id] ?? ''}
+                                        onChange={e => setRemitInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                        className="w-full border rounded px-3 py-2 text-sm"
+                                    />
+                                    <button
+                                        onClick={() => submitRemit(order.id)}
+                                        disabled={
+                                            remitSubmitting ||
+                                            (remitInputs[order.id]?.trim().length ?? 0) !== 5
+                                        }
+                                        className="w-full py-2 bg-orange-500 text-white rounded text-sm disabled:opacity-40"
+                                    >送出匯款資訊</button>
+                                </div>
+                            </div>
                         )}
                         {order.status === 'payment_submitted' && order.remit_last5 && (
                             <p className="text-xs text-purple-500">已收到您的匯款後五碼：{order.remit_last5}</p>

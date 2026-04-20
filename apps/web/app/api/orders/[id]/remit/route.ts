@@ -26,7 +26,7 @@ export async function PATCH(
             .single()
 
         if (fetchError || !order) return errorResponse('ORDER_NOT_FOUND', 404)
-        if (order.line_user_id !== profile.userId) return errorResponse('FORBIDDDEN', 403)
+        if (order.line_user_id !== profile.userId) return errorResponse('FORBIDDEN', 403)
 
         // 2. state check
         assertTransition(order.status, 'payment_submitted')
@@ -35,7 +35,7 @@ export async function PATCH(
         const { error: updateError } = await supabase
             .from('orders')
             .update({
-                remitLast5: remitLast5,
+                remit_last5: remitLast5,
                 status: 'payment_submitted',
             })
             .eq('id', id)
