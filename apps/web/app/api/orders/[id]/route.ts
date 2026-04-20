@@ -49,12 +49,12 @@ export async function DELETE (
         if (order.line_user_id !== profile.userId) throw errorResponse('FORBIDDEN', 403)
 
         // 2. status check: only in pending status can be deleted
-        assertCancellable(order.status)
+        if (order.status !== 'pending') return errorResponse('INVALID_TRANSITION', 400)
 
         // 3. call DB function to release stock and update status
         const { error } = await supabase.rpc('admin_cancel_order', {
             p_order_id: params.id,
-            p_reseason: '客戶自行取消'
+            p_reason: '客戶自行取消'
         })
 
         if (error) throw new Error(error.message)

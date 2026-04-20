@@ -185,7 +185,7 @@ create or replace function update_order(
 ) returns void language plpgsql as $$
 declare
     v_order     record;
-    v_item      record;
+    v_item      jsonb;
     v_product   record;
     v_total     int := 0;
 begin
