@@ -48,6 +48,8 @@ export default function StatusPage() {
     const [editQuantities, setEditQuantities] = useState<Record<string, number>>({})
     const [submitting, setSubmitting] = useState(false)
 
+    const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null)
+
     useEffect(() => {
         fetch('/api/orders', {
             headers: { 'x-liff-token': 'mock-token' }
@@ -88,7 +90,7 @@ export default function StatusPage() {
                     'Content-Type': 'application/json',
                     'x-liff-token': 'mock-token'
                 },
-                body: JSON.stringify({ items }, )
+                body: JSON.stringify({ items },)
             })
 
             if (!res.ok) {
@@ -101,6 +103,30 @@ export default function StatusPage() {
             setError(e.message)
         } finally {
             setSubmitting(false)
+        }
+    }
+
+    async function submitCancel(orderId: string) {
+        setSubmitting(true)
+        try {
+            const res = await fetch(`/api/orders/${orderId}`, {
+                method: 'DELETE',
+                headers: {
+                    'x-liff-token': 'mock-token'
+                }
+            })
+
+            if (!res.ok) {
+                const body = await res.json()
+                throw new Error(body.message ?? '取消失敗')
+            }
+
+            window.location.reload()
+        } catch (e: any) {
+            setError(e.message)
+        } finally {
+            setSubmitting(false)
+            setCancellingOrderId(null)
         }
     }
 
@@ -168,12 +194,36 @@ export default function StatusPage() {
                         </div>
                     )}
 
-                    {/* pending status shows button (view mode) */}
+                    {/* pending status shows edit ane cancel button (view mode) */}
                     {order.status === 'pending' && editingOrderId !== order.id && (
-                        <button
-                            onClick={() => startEdit(order)}
-                            className="text-sm text-blue-500 underline"
-                        >修改訂單</button>
+                        <div className="space-y-2">
+                            <button
+                                onClick={() => startEdit(order)}
+                                className="text-sm text-blue-500 underline"
+                            >修改訂單</button>
+
+                            {cancellingOrderId === order.id ? (
+                                <div className="space-y-2">
+                                    <p className="text-sm text-red-500">確定要取消這筆訂單嗎？</p>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => submitCancel(order.id)}
+                                            disabled={submitting}
+                                            className="flex-1 py-2 bg-red-500 text-white rounded text-sm disabled:opacity-40"
+                                        >確認取消</button>
+                                        <button
+                                            onClick={() => setCancellingOrderId(null)}
+                                            className="flex-1 py-2 border rounded text-sm"
+                                        >我再想想</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => setCancellingOrderId(order.id)}
+                                    className="text-sm text-red-400 underline"
+                                >取消訂單</button>
+                            )}
+                        </div>
                     )}
 
                     {/* total amount */}
