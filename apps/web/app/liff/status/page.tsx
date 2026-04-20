@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 
 type OrderItem = {
     quantity: number
-    unit_price: number,
+    unit_price: number
+    product_id: string
     products: { name: string }
 }
 
@@ -21,27 +22,31 @@ type Order = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-    pending:            '待確認',
-    in_production:      '製作中',
-    pending_payment:    '待付款',
-    payment_submitted:  '付款確認中',
-    completed:          '已完成',
-    cancelled:          '已取消',
+    pending: '待確認',
+    in_production: '製作中',
+    pending_payment: '待付款',
+    payment_submitted: '付款確認中',
+    completed: '已完成',
+    cancelled: '已取消',
 }
 
 const STATUS_COLOR: Record<string, string> = {
-    pending:           'bg-yellow-100 text-yellow-700',
-    in_production:     'bg-blue-100 text-blue-700',
-    pending_payment:   'bg-orange-100 text-orange-700',
+    pending: 'bg-yellow-100 text-yellow-700',
+    in_production: 'bg-blue-100 text-blue-700',
+    pending_payment: 'bg-orange-100 text-orange-700',
     payment_submitted: 'bg-purple-100 text-purple-700',
-    completed:         'bg-green-100 text-green-700',
-    cancelled:         'bg-gray-100 text-gray-500',
+    completed: 'bg-green-100 text-green-700',
+    cancelled: 'bg-gray-100 text-gray-500',
 }
 
 export default function StatusPage() {
     const [orders, setOrders] = useState<Order[]>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    const [editingOrderId, setEditingOrderId] = useState<string | null>(null)
+    const [editQuantities, setEditQuantities] = useState<Record<string, number>>({})
+    const [submitting, setSubmitting] = useState(false)
 
     useEffect(() => {
         fetch('/api/orders', {
@@ -54,11 +59,50 @@ export default function StatusPage() {
             })
             .catch(() => setError('載入失敗，請稍後再試'))
             .finally(() => setLoading(false))
-    })
+    }, [])
 
     if (loading) return <div className="p-4">載入中...</div>
-    if (error)   return <div className="p-4 text-red-500">{error}</div>
+    if (error) return <div className="p-4 text-red-500">{error}</div>
     if (orders.length === 0) return <div className="p-4 text-gray-500">目前沒有訂單紀錄</div>
+
+    function startEdit(order: Order) {
+        setEditingOrderId(order.id)
+
+        const init: Record<string, number> = {}
+        order.order_items.forEach(item => {
+            init[item.products.name] = item.quantity
+        })
+        setEditQuantities(init)
+    }
+
+    async function submitEdit(order: Order, sessionProducts: { id: string, name: string, stock_qty: number }[]) {
+        setSubmitting(true)
+        try {
+            const items = sessionProducts
+                .filter(p => (editQuantities[p.name] ?? 0) > 0)
+                .map(p => ({ product_id: p.id, quantity: editQuantities[p.name] }))
+
+            const res = await fetch(`/api/orders/${order.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-liff-token': 'mock-token'
+                },
+                body: JSON.stringify({ items }, )
+            })
+
+            if (!res.ok) {
+                const body = await res.json()
+                throw new Error(body.message ?? '修改失敗')
+            }
+
+            window.location.reload()
+        } catch (e: any) {
+            setError(e.message)
+        } finally {
+            setSubmitting(false)
+        }
+    }
 
     return (
         <div className="p-4 max-w-md mx-auto space-y-4">
@@ -78,14 +122,59 @@ export default function StatusPage() {
                     </div>
 
                     {/* items list */}
-                    <div className="space-y-1">
-                        {order.order_items.map((item, i) => (
-                            <div key={i} className="flex justify-between text-sm">
-                                <span>{item.products.name} × {item.quantity}</span>
-                                <span>NT$ {item.unit_price * item.quantity}</span>
+                    {order.status === 'pending' && editingOrderId === order.id ? (
+                        // editing mode
+                        <div className="space-y-2">
+                            {order.order_items.map(item => (
+                                <div key={item.product_id} className="flex items-center justify-between text-sm">
+                                    <span>{item.products.name}</span>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => setEditQuantities(prev => ({
+                                            ...prev,
+                                            [item.products.name]: Math.max(0, (prev[item.products.name] ?? 0) - 1)
+                                        }))} className="w-7 h-7 rounded-full border">−</button>
+                                        <span className="w-5 text-center">{editQuantities[item.products.name] ?? 0}</span>
+                                        <button onClick={() => setEditQuantities(prev => ({
+                                            ...prev,
+                                            [item.products.name]: (prev[item.products.name] ?? 0) + 1
+                                        }))} className="w-7 h-7 rounded-full border">+</button>
+                                    </div>
+                                </div>
+                            ))}
+                            <div className="flex gap-2 mt-2">
+                                <button
+                                    onClick={() => submitEdit(order, order.order_items.map(i => ({
+                                        id: i.product_id,
+                                        name: i.products.name,
+                                        stock_qty: 999,
+                                    })))}
+                                    disabled={submitting || Object.values(editQuantities).every(q => q === 0)}
+                                    className="flex-1 py-2 bg-green-500 text-white rounded text-sm disabled:opacity-40"
+                                >送出修改</button>
+                                <button
+                                    onClick={() => setEditingOrderId(null)}
+                                    className="flex-1 py-2 border rounded text-sm"
+                                >取消</button>
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            {order.order_items.map((item, i) => (
+                                <div key={i} className="flex justify-between text-sm">
+                                    <span>{item.products.name} × {item.quantity}</span>
+                                    <span>NT$ {item.unit_price * item.quantity}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* pending status shows button (view mode) */}
+                    {order.status === 'pending' && editingOrderId !== order.id && (
+                        <button
+                            onClick={() => startEdit(order)}
+                            className="text-sm text-blue-500 underline"
+                        >修改訂單</button>
+                    )}
 
                     {/* total amount */}
                     <div className="border-t pt-2 text-sm space-y-1">
@@ -116,7 +205,7 @@ export default function StatusPage() {
                             <p className="text-xs text-green-500">感謝您的購買！</p>
                         )}
                     </div>
-                 </div>
+                </div>
             ))}
         </div>
     )

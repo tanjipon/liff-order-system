@@ -11,9 +11,10 @@ const supabase = createClient(
 
 export async function PATCH(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const profile = await verifyLiffToken(req)
         const { remitLast5 } = await req.json()
 
@@ -21,7 +22,7 @@ export async function PATCH(
         const { data: order, error: fetchError } = await supabase
             .from('orders')
             .select('status, line_user_id')
-            .eq('id', params.id)
+            .eq('id', id)
             .single()
 
         if (fetchError || !order) return errorResponse('ORDER_NOT_FOUND', 404)
@@ -37,7 +38,7 @@ export async function PATCH(
                 remitLast5: remitLast5,
                 status: 'payment_submitted',
             })
-            .eq('id', params.id)
+            .eq('id', id)
 
         if (updateError) throw new Error(updateError?.message)
 

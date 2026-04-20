@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
                 order_items (
                     quantity,
                     unit_price,
+                    product_id,
                     products ( name )
                 )    
             `)

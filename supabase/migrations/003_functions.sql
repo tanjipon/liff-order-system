@@ -212,6 +212,11 @@ begin
     -- 3. selete order items
     delete from order_items where order_id = p_order_id;
 
+    -- check new items is not zero
+    if jsonb_array_length(p_items) = 0 then
+        raise exception 'ORDER_ITEMS_EMPTY';
+    end if;
+
     -- 4. update stock and add new items
     for v_item in select * from jsonb_array_elements(p_items)
     loop    

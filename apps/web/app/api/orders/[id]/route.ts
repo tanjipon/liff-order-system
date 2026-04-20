@@ -11,14 +11,15 @@ const supabase = createClient(
 
 export async function PUT (
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }>  }
 ) {
     try {
+        const { id } = await params
         const profile = await verifyLiffToken(req)
         const { items } = await req.json()
 
         const { error } = await supabase.rpc('update_order', {
-            p_order_id:     params.id,
+            p_order_id:     id,
             p_line_user_id: profile.userId,
             p_items:        items
         })
@@ -33,16 +34,17 @@ export async function PUT (
 
 export async function DELETE (
     req: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params
         const profile = await verifyLiffToken(req)
 
         // 1. get order and validate owner
         const { data: order, error: fetchError } = await supabase
             .from('orders')
             .select('status, line_user_id')
-            .eq('id', params.id)
+            .eq('id', id)
             .single()
 
         if (fetchError || !order) return errorResponse('ORDER_NOT_FOUND', 404)
@@ -53,7 +55,7 @@ export async function DELETE (
 
         // 3. call DB function to release stock and update status
         const { error } = await supabase.rpc('admin_cancel_order', {
-            p_order_id: params.id,
+            p_order_id: id,
             p_reason: '客戶自行取消'
         })
 
