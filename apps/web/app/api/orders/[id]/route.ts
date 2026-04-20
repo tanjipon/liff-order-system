@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyLiffToken } from '@/lib/auth/verifyLiff'
 import { errorResponse } from '@/lib/api/response'
+import { assertCancellable } from '@/lib/orderStatus'
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +21,40 @@ export async function PUT (
             p_order_id:     params.id,
             p_line_user_id: profile.userId,
             p_items:        items
+        })
+
+        if (error) throw new Error(error.message)
+
+        return Response.json({ data: { success: true } })
+    } catch (e: any) {
+        return errorResponse(e.message)
+    }
+}
+
+export async function DELETE (
+    req: NextRequest,
+    { params }: { params: { id: string } }
+) {
+    try {
+        const profile = await verifyLiffToken(req)
+
+        // 1. get order and validate owner
+        const { data: order, error: fetchError } = await supabase
+            .from('orders')
+            .select('status, line_user_id')
+            .eq('id', params.id)
+            .single()
+
+        if (fetchError || !order) return errorResponse('ORDER_NOT_FOUND', 404)
+        if (order.line_user_id !== profile.userId) throw errorResponse('FORBIDDEN', 403)
+
+        // 2. status check: only in pending status can be deleted
+        assertCancellable(order.status)
+
+        // 3. call DB function to release stock and update status
+        const { error } = await supabase.rpc('admin_cancel_order', {
+            p_order_id: params.id,
+            p_reseason: '客戶自行取消'
         })
 
         if (error) throw new Error(error.message)
