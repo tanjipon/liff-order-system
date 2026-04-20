@@ -24,7 +24,7 @@ export async function PUT (
 
         if (error) throw new Error(error.message)
 
-            return Response.json({ data: { success: true } })
+        return Response.json({ data: { success: true } })
     } catch (e: any) {
         return errorResponse(e.message)
     }
