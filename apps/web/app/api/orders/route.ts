@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
                 order_items (
                     quantity,
                     unit_price,
-                    productes ( name )
+                    products ( name )
                 )    
             `)
             .eq('line_user_id', profile.userId)
