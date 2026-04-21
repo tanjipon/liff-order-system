@@ -31,11 +31,11 @@ export async function PATCH(
         // 2. status validation
         assertTransition(order.status, 'cancelled')
 
-        // 3. update status
-        const { error: updateError } = await supabase
-            .from('orders')
-            .update({ status: 'cancelled', cancelled_by: 'admin', cancel_reason: reason })
-            .eq('id', id)
+        // 3. cancel order
+        const { error: updateError } = await supabase.rpc('admin_cancel_order', {
+            p_order_id: id,
+            p_reason: reason,
+        })
 
         if (updateError) throw new Error(updateError.message)
 
