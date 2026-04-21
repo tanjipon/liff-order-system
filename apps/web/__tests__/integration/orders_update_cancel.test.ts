@@ -66,7 +66,7 @@ describe('PUT /api/orders/:id (update order)', () => {
         const req = makeRequest('PUT', orderId, {
             items: [{ product_id: PRODUCT_ID, quantity: 3 }], // change to 3
         })
-        const res = await PUT(req, { params: { id: orderId } })
+        const res = await PUT(req, { params: Promise.resolve({ id: orderId }) })
         const body = await res.json()
         console.log('PUT response:', body)  // 加這行
         expect(res.status).toBe(200)
@@ -82,7 +82,7 @@ describe('PUT /api/orders/:id (update order)', () => {
         const req = makeRequest('PUT', orderId, {
             items: [{ product_id: PRODUCT_ID, quantity: 1 }], // change to 1
         })
-        await PUT(req, { params: { id: orderId } })
+        await PUT(req, { params: Promise.resolve({ id: orderId }) })
 
         const { data: order } = await supabase
             .from('orders').select('total_amount').eq('id', orderId).single()
@@ -96,7 +96,7 @@ describe('PUT /api/orders/:id (update order)', () => {
         const req = makeRequest('PUT', orderId, {
             items: [{ product_id: PRODUCT_ID, quantity: 1 }],
         })
-        const res = await PUT(req, { params: { id: orderId } })
+        const res = await PUT(req, { params: Promise.resolve({ id: orderId }) })
         expect(res.status).toBe(400)
         const body = await res.json()
         expect(body.error).toContain('INVALID_TRANSITION')
@@ -108,7 +108,7 @@ describe('DELETE /api/orders/:id (client cancel order)', () => {
         const orderId = await createTestOrder(2) // 扣 2，剩 18
 
         const req = makeRequest('DELETE', orderId)
-        const res = await DELETE(req, { params: { id: orderId } })
+        const res = await DELETE(req, { params: Promise.resolve({ id: orderId }) })
         expect(res.status).toBe(200)
 
         const { data: product } = await supabase
@@ -120,7 +120,7 @@ describe('DELETE /api/orders/:id (client cancel order)', () => {
         const orderId = await createTestOrder(2)
 
         const req = makeRequest('DELETE', orderId)
-        await DELETE(req, { params: { id: orderId } })
+        await DELETE(req, { params: Promise.resolve({ id: orderId }) })
 
         const { error } = await supabase.rpc('create_order', {
             p_session_id: SESSION_ID,
@@ -138,7 +138,7 @@ describe('DELETE /api/orders/:id (client cancel order)', () => {
         await supabase.from('orders').update({ status: 'in_production' }).eq('id', orderId)
 
         const req = makeRequest('DELETE', orderId)
-        const res = await DELETE(req, { params: { id: orderId } })
+        const res = await DELETE(req, { params: Promise.resolve({ id: orderId }) })
         expect(res.status).toBe(400)
     })
 })
