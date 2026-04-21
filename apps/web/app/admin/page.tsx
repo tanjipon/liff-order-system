@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { adminFetch } from '@/lib/auth/adminClient'
+import Link from 'next/link'
 
 type Order = {
     id: string
@@ -78,9 +79,14 @@ export default function AdminDashBoard() {
         <div className="p-6 max-w-4xl mx-auto">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">訂單管理</h1>
-                <button onClick={loadOrders} className="text-sm text-gray-500 border rounded px-3 py-1">
-                    重新整理
-                </button>
+                <div className="flex gap-2">
+                    <Link href="/admin/sessions" className="text-sm text-gray-500 border rounded px-3 py-1">
+                        開單管理
+                    </Link>
+                    <button onClick={loadOrders} className="text-sm text-gray-500 border rounded px-3 py-1">
+                        重新整理
+                    </button>
+                </div>
             </div>
 
             {activeOrders.length === 0 && (

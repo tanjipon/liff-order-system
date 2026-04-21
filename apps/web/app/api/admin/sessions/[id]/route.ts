@@ -8,16 +8,24 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-export async function GET(req: NextRequest) {
+export async function GET(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
     try {
+        const { id } = await params
         await verifyAdmin(req)
 
         const { data, error } = await supabase
             .from('sessions')
-            .select('id, title, opens_at, closes_at, per_person_limit, is_active, created_at')
-            .order('created_at', { ascending: false })
+            .select(`
+                id, title, opens_at, closes_at, per_person_limit, is_active, created_at,
+                products ( id, name, price, stock_qty )
+            `)
+            .eq('id', id)
+            .single()
 
-        if (error) throw new Error(error.message)
+        if (error || !data) return errorResponse('SESSION_NOT_FOUND', 404)
 
         return Response.json({ data })
     } catch (e: any) {
@@ -25,30 +33,32 @@ export async function GET(req: NextRequest) {
     }
 }
 
-export async function POST(req: NextRequest) {
+export async function PATCH(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
     try {
+        const { id } = await params
         const ctx = await verifyAdmin(req)
-        assertPermission(ctx, 'sessions:create')
+        assertPermission(ctx, 'sessions:edit')
 
         const { title, opensAt, closesAt, perPersonLimit } = await req.json()
 
-        const { data, error } = await supabase
+        const { error } = await supabase
             .from('sessions')
-            .insert({
+            .update({
                 title,
                 opens_at: opensAt ?? null,
                 closes_at: closesAt ?? null,
                 per_person_limit: perPersonLimit ?? null,
-                is_active: true,
             })
-            .select('id')
-            .single()
+            .eq('id', id)
 
         if (error) throw new Error(error.message)
 
-        return Response.json({ data: { sessionId: data.id } }, { status: 201 })
-
+        return Response.json({ data: { success: true } })
     } catch (e: any) {
         return errorResponse(e.message)
     }
 }
+
