@@ -176,3 +176,83 @@ begin
     where id = p_order_id;
 end;
 $$;
+
+-- update order
+create or replace function update_order(
+    p_order_id      uuid,
+    p_line_user_id  text,
+    p_items         jsonb
+) returns void language plpgsql as $$
+declare
+    v_order     record;
+    v_item      jsonb;
+    v_product   record;
+    v_total     int := 0;
+begin
+    -- 1. lock order, validate owner and status to be pending
+    select * into v_order from orders
+    where id = p_order_id and line_user_id = p_line_user_id
+    for update;
+
+    if not found then
+        raise exception 'ORDER_NOT_FOUND';
+    end if;
+
+    if v_order.status != 'pending' then
+        raise exception 'INVALID_TRANSITION';
+    end if;
+
+    -- 2. update stock
+    update products p
+    set stock_qty = p.stock_qty + oi.quantity
+    from order_items oi
+    where oi.order_id = p_order_id
+        and oi.product_id = p.id;
+
+    -- 3. selete order items
+    delete from order_items where order_id = p_order_id;
+
+    -- check new items is not zero
+    if jsonb_array_length(p_items) = 0 then
+        raise exception 'ORDER_ITEMS_EMPTY';
+    end if;
+
+    -- 4. update stock and add new items
+    for v_item in select * from jsonb_array_elements(p_items)
+    loop    
+        select * into v_product
+        from products
+        where id = (v_item->>'product_id')::uuid
+        for update;
+
+        if not found then
+            raise exception 'PRODUCT_NOT_FOUND';
+        end if;
+
+        if v_product.stock_qty < (v_item->>'quantity')::int then
+            raise exception 'INSUFFICIENT_STOCK:%', v_product.name;
+        end if;
+
+        update products
+        set stock_qty = stock_qty - (v_item->>'quantity')::int
+        where id = v_product.id;
+
+        insert into order_items (order_id, product_id, quantity, unit_price)
+        values (
+            p_order_id, 
+            v_product.id,
+            (v_item->>'quantity')::int,
+            v_product.price
+        );
+
+        v_total := v_total + v_product.price * (v_item->>'quantity')::int;
+    end loop;
+
+    -- 5. update order amount and edit history
+    update orders
+    set total_amount    = v_total + pickup_fee,
+        edit_count      = edit_count + 1,
+        last_edited_at  = now()
+    where id = p_order_id; 
+end;
+$$;

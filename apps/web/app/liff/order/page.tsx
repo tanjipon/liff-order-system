@@ -24,6 +24,8 @@ export default function OderPage() {
     const [orderId, setOrderId] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
 
+    const [quotaUsed, setQuotaUsed] = useState(0)
+
     useEffect(() => {
         fetch('/api/sessions/active')
             .then(res => res.json())
@@ -35,6 +37,21 @@ export default function OderPage() {
                         init[p.id] = 0
                     })
                     setQuantities(init)
+
+                    // calculate used quota
+                    fetch('/api/orders', {
+                        headers: { 'x-liff-token': 'mock-token' },
+                    })
+                        .then(res => res.json())
+                        .then(body => {
+                            if (body.data) {
+                                const used = body.data
+                                    .filter((o: any) => o.status !== 'cancelled')
+                                    .reduce((sum: number, o: any) =>
+                                        sum + o.order_items.reduce((s: number, i: any) => s + i.quantity, 0), 0)
+                                setQuotaUsed(used)
+                            }
+                        })
                 } else {
                     setError('目前沒有開放中的訂單')
                 }
@@ -52,6 +69,7 @@ export default function OderPage() {
     }
 
     const totalItems = Object.values(quantities).reduce((sum, q) => sum + q, 0)
+    const totalSelected = totalItems + quotaUsed
     const totalAmount = session?.products.reduce(
         (sum, p) => sum + p.price * (quantities[p.id] ?? 0), 0
     ) ?? 0
@@ -83,7 +101,7 @@ export default function OderPage() {
                 },
                 body: JSON.stringify({
                     sessionId: session!.id,
-                    items:      session!.products
+                    items: session!.products
                         .filter(p => (quantities[p.id]) ?? 0 > 0)
                         .map(p => ({ product_id: p.id, quantity: quantities[p.id] })),
                     pickupOptionId: 'cccccccc-0000-0000-0000-000000000001', // user's choice after M7
@@ -94,7 +112,7 @@ export default function OderPage() {
             const body = await res.json()
             if (!res.ok) throw new Error(body.message ?? '訂單送出失敗')
             setOrderId(body.data.orderId)
-        } catch (e : any) {
+        } catch (e: any) {
             setError(e.message)
         } finally {
             setSubmitting(false)
@@ -105,20 +123,19 @@ export default function OderPage() {
         <div className="p-4 max-w-md mx-auto">
             <h1 className="text-xl font-bold mb-4">{session.title}</h1>
             {session.per_person_limit && (
-                <div className={`text-sm mb-4 p-2 rounded ${
-                    totalItems >= session.per_person_limit
+                <div className={`text-sm mb-4 p-2 rounded ${totalSelected >= session.per_person_limit
                         ? 'bg-red-50 text-red-600'
                         : 'bg-gray-50 text-gray-500'
-                }`}>
+                    }`}>
                     每人限購 {session.per_person_limit} 件
-                    已選 {totalItems} 件
+                    已選 {totalSelected} 件
                 </div>
             )}
 
             <div className="space-y-4">
                 {session.products.map(product => (
-                    <div 
-                        key={product.id} 
+                    <div
+                        key={product.id}
                         className="flex items-center justify-between border rounded p-3"
                         data-testid={`product-${product.id}`}
                     >
@@ -136,8 +153,8 @@ export default function OderPage() {
                             <button
                                 onClick={() => updateQuantity(product.id, 1, product.stock_qty)}
                                 disabled={
-                                    (quantities[product.id] ?? 0) >= product.stock_qty || 
-                                    (session.per_person_limit !== null && totalItems >= session.per_person_limit)
+                                    (quantities[product.id] ?? 0) >= product.stock_qty ||
+                                    (session.per_person_limit !== null && totalSelected >= session.per_person_limit)
                                 }
                                 className="w-8 h-8 rounded-full border text-lg disabled:opacity-40"
                             >+</button>

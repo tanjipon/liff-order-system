@@ -30,3 +30,36 @@ export async function POST(req: NextRequest) {
         return errorResponse(e.message)
     }
 }
+
+export async function GET(req: NextRequest) {
+    try {
+        const profile = await verifyLiffToken(req)
+
+        const { data: orders, error } = await supabase
+            .from('orders')
+            .select(`
+                id,
+                status,
+                payment_method,
+                total_amount,
+                pickup_fee,
+                remit_last5,
+                queue_number,
+                created_at,
+                order_items (
+                    quantity,
+                    unit_price,
+                    product_id,
+                    products ( name )
+                )    
+            `)
+            .eq('line_user_id', profile.userId)
+            .order('created_at', { ascending: false })
+
+        if (error) throw new Error(error.message)
+
+        return Response.json({ data: orders })
+    } catch (e: any) {
+        return errorResponse(e.message)
+    }
+} 
