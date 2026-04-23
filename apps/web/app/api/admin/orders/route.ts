@@ -1,16 +1,12 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyAdmin } from '@/lib/auth/verifyAdmin'
 import { errorResponse } from '@/lib/api/response'
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { getSupabaseAdmin } from '@/lib/supabase/server'
 
 export async function GET(req: NextRequest) {
     try {
         await verifyAdmin(req)
+        const supabase = getSupabaseAdmin()
 
         const { data: orders, error } = await supabase
             .from('orders')

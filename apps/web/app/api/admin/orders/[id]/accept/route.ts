@@ -1,13 +1,8 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyAdmin, assertPermission } from '@/lib/auth/verifyAdmin'
 import { assertTransition } from '@/lib/orderStatus'
 import { errorResponse } from '@/lib/api/response'
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { getSupabaseAdmin } from '@/lib/supabase/server'
 
 export async function PATCH(
     req: NextRequest,
@@ -17,6 +12,7 @@ export async function PATCH(
         const { id } = await params
         const cxt = await verifyAdmin(req)
         assertPermission(cxt, 'orders:accept')
+        const supabase = getSupabaseAdmin()
 
         // 1. get order
         const { data: order, error: fetchError } = await supabase

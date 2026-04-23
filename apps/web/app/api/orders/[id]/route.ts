@@ -1,13 +1,8 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyLiffToken } from '@/lib/auth/verifyLiff'
 import { errorResponse } from '@/lib/api/response'
 import { assertCancellable } from '@/lib/orderStatus'
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { getSupabaseAdmin } from '@/lib/supabase/server'
 
 export async function PUT (
     req: NextRequest,
@@ -16,6 +11,7 @@ export async function PUT (
     try {
         const { id } = await params
         const profile = await verifyLiffToken(req)
+        const supabase = getSupabaseAdmin()
         const { items } = await req.json()
 
         const { error } = await supabase.rpc('update_order', {
@@ -39,6 +35,7 @@ export async function DELETE (
     try {
         const { id } = await params
         const profile = await verifyLiffToken(req)
+        const supabase = getSupabaseAdmin()
 
         // 1. get order and validate owner
         const { data: order, error: fetchError } = await supabase

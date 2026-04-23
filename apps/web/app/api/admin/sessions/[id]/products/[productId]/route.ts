@@ -1,12 +1,7 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyAdmin, assertPermission } from '@/lib/auth/verifyAdmin'
 import { errorResponse } from '@/lib/api/response'
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { getSupabaseAdmin } from '@/lib/supabase/server'
 
 export async function PATCH(
     req: NextRequest,
@@ -16,6 +11,7 @@ export async function PATCH(
         const { productId } = await params
         const ctx = await verifyAdmin(req)
         assertPermission(ctx, 'sessions:edit')
+        const supabase = getSupabaseAdmin()
 
         const { name, price, stockQty } = await req.json()
 
@@ -40,6 +36,7 @@ export async function DELETE(
         const { productId } = await params
         const ctx = await verifyAdmin(req)
         assertPermission(ctx, 'sessions:edit')
+        const supabase = getSupabaseAdmin()
 
         const { error } = await supabase
             .from('products')

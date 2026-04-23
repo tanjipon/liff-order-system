@@ -1,12 +1,7 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyAdmin, assertPermission } from '@/lib/auth/verifyAdmin'
 import { errorResponse } from '@/lib/api/response'
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { getSupabaseAdmin } from '@/lib/supabase/server'
 
 export async function GET(
     req: NextRequest,
@@ -15,6 +10,7 @@ export async function GET(
     try {
         const { id } = await params
         await verifyAdmin(req)
+        const supabase = getSupabaseAdmin()
 
         const { data, error } = await supabase
             .from('sessions')
@@ -42,6 +38,7 @@ export async function PATCH(
         const ctx = await verifyAdmin(req)
         assertPermission(ctx, 'sessions:edit')
 
+        const supabase = getSupabaseAdmin()
         const { title, opensAt, closesAt, perPersonLimit } = await req.json()
 
         const { error } = await supabase

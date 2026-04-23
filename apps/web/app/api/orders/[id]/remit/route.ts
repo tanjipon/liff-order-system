@@ -1,13 +1,8 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyLiffToken } from '@/lib/auth/verifyLiff'
 import { assertTransition } from '@/lib/orderStatus'
 import { errorResponse } from '@/lib/api/response'
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { getSupabaseAdmin } from '@/lib/supabase/server'
 
 export async function PATCH(
     req: NextRequest,
@@ -16,6 +11,7 @@ export async function PATCH(
     try {
         const { id } = await params
         const profile = await verifyLiffToken(req)
+        const supabase = getSupabaseAdmin()
         const { remitLast5 } = await req.json()
 
         // 1. get orders and validate the owner
