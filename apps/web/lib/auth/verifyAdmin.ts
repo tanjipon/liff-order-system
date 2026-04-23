@@ -12,7 +12,7 @@ export type AdminContext = {
 }
 
 export async function verifyAdmin(req: NextRequest): Promise<AdminContext> {
-    const token  = req.headers.get('authorization')?.replace('Berar ', '')
+    const token  = req.headers.get('authorization')?.replace('Bearer ', '')
     if (!token) throw new Error('UNAUTHORIZED')
 
     // 1. Verify JWT token to get user
@@ -44,7 +44,7 @@ export async function verifyAdmin(req: NextRequest): Promise<AdminContext> {
     if (!data.is_active) throw new Error('ACCOUNT_DISABLED')
 
     const permissions = (data.roles as any).role_permissions
-        .map((rp: any) => rp.role_permissions.key as Permission)
+        .map((rp: any) => rp.permissions.key as Permission)
     
     return {
         userId: user.id,
@@ -53,4 +53,10 @@ export async function verifyAdmin(req: NextRequest): Promise<AdminContext> {
         roleName: (data.roles as any).name,
         permissions,
     } 
+}
+
+export function assertPermission(ctx: AdminContext, permission: Permission): void {
+    if (!ctx.permissions.includes(permission)) {
+        throw new Error('FORBIDDEN')
+    }
 }

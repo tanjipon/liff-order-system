@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { verifyLiffToken } from '@/lib/auth/verifyLiff'
+import { verifyAdmin, assertPermission } from '@/lib/auth/verifyAdmin'
 import { assertTransition } from '@/lib/orderStatus'
 import { errorResponse } from '@/lib/api/response'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
@@ -10,33 +10,29 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params
-        const profile = await verifyLiffToken(req)
+        const cxt = await verifyAdmin(req)
+        assertPermission(cxt, 'orders:confirm_payment')
         const supabase = getSupabaseAdmin()
-        const { remitLast5 } = await req.json()
 
-        // 1. get orders and validate the owner
+        // 1. get order
         const { data: order, error: fetchError } = await supabase
             .from('orders')
-            .select('status, line_user_id')
+            .select('status, session_id')
             .eq('id', id)
             .single()
 
         if (fetchError || !order) return errorResponse('ORDER_NOT_FOUND', 404)
-        if (order.line_user_id !== profile.userId) return errorResponse('FORBIDDEN', 403)
 
-        // 2. state check
-        assertTransition(order.status, 'payment_submitted')
+        // 2. status validation
+        assertTransition(order.status, 'completed')
 
-        // 3. update remit_last5 and status
+        // 3. update status
         const { error: updateError } = await supabase
             .from('orders')
-            .update({
-                remit_last5: remitLast5,
-                status: 'payment_submitted',
-            })
+            .update({ status: 'completed' })
             .eq('id', id)
 
-        if (updateError) throw new Error(updateError?.message)
+        if (updateError) throw new Error(updateError.message)
 
         return Response.json({ data: { success: true } })
     } catch (e: any) {

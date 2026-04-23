@@ -1,16 +1,12 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyLiffToken } from '@/lib/auth/verifyLiff'
 import { errorResponse } from '@/lib/api/response'
-
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { getSupabaseAdmin } from '@/lib/supabase/server'
 
 export async function POST(req: NextRequest) {
     try {
         const profile = await verifyLiffToken(req)
+        const supabase = getSupabaseAdmin()
 
         const { sessionId, items, pickupOptionId, paymentMethod } = await req.json()
 
@@ -34,6 +30,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
     try {
         const profile = await verifyLiffToken(req)
+        const supabase = getSupabaseAdmin()
 
         const { data: orders, error } = await supabase
             .from('orders')
