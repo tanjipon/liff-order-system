@@ -83,6 +83,9 @@ export default function AdminDashBoard() {
                     <Link href="/admin/sessions" className="text-sm text-gray-500 border rounded px-3 py-1">
                         開單管理
                     </Link>
+                    <Link href="/admin/orders" className="text-sm text-gray-500 border rounded px-3 py-1">
+                        歷史訂單
+                    </Link>
                     <button onClick={loadOrders} className="text-sm text-gray-500 border rounded px-3 py-1">
                         重新整理
                     </button>
