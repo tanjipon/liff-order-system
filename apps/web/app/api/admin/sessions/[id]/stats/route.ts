@@ -30,6 +30,8 @@ export async function GET(
         if (ordersError) throw new Error(ordersError.message)
 
         const orderList = orders ?? []
+        console.log('orderList order_items:', JSON.stringify(orderList.map(o => o.order_items)))
+
 
         // 2. Calculate stats
         const totalOrders = orderList.length
@@ -40,7 +42,7 @@ export async function GET(
 
         for (const order of orderList) {
             for (const item of order.order_items) {
-                const product = item.products[0]
+                const product = (item.products as unknown as { id: string; name: string } | null)
                 if (!product) continue
                 if (!productMap[product.id]) {
                     productMap[product.id] = { name: product.name, qty: 0, revenue: 0 }
