@@ -281,36 +281,46 @@ export default function StatusPage() {
                             <div className="space-y-2">
                                 <p className="text-sm font-medium text-orange-500">製作完成！請完成付款</p>
 
-                                {/* 匯款資訊 */}
-                                <div className="bg-orange-50 rounded p-3 text-sm space-y-1">
-                                    <p>銀行代碼：{process.env.NEXT_PUBLIC_BANK_CODE}</p>
-                                    <p>帳號：{process.env.NEXT_PUBLIC_BANK_ACCOUNT}</p>
-                                    <p>戶名：{process.env.NEXT_PUBLIC_BANK_HOLDER}</p>
-                                    <p className="font-bold text-orange-600">匯款金額：NT$ {order.total_amount}</p>
-                                </div>
+                                {order.payment_method === 'bank_transfer' ? (
+                                    <>
+                                        {/* transfer info */}
+                                        <div className="bg-orange-50 rounded p-3 text-sm space-y-1">
+                                            <p>銀行代碼：{process.env.NEXT_PUBLIC_BANK_CODE}</p>
+                                            <p>帳號：{process.env.NEXT_PUBLIC_BANK_ACCOUNT}</p>
+                                            <p>戶名：{process.env.NEXT_PUBLIC_BANK_HOLDER}</p>
+                                            <p className="font-bold text-orange-600">匯款金額：NT$ {order.total_amount}</p>
+                                        </div>
 
-                                {/* 填入後五碼 */}
-                                <div className="space-y-2">
-                                    <p className="text-sm text-gray-600">匯款完成後，請填入帳號後五碼：</p>
-                                    <input
-                                        type="text"
-                                        maxLength={5}
-                                        placeholder="例如：12345"
-                                        value={remitInputs[order.id] ?? ''}
-                                        onChange={e => setRemitInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
-                                        className="w-full border rounded px-3 py-2 text-sm"
-                                    />
-                                    <button
-                                        onClick={() => submitRemit(order.id)}
-                                        disabled={
-                                            remitSubmitting ||
-                                            (remitInputs[order.id]?.trim().length ?? 0) !== 5
-                                        }
-                                        className="w-full py-2 bg-orange-500 text-white rounded text-sm disabled:opacity-40"
-                                    >送出匯款資訊</button>
-                                </div>
+                                        {/* fill in last remit 5 */}
+                                        <div className="space-y-2">
+                                            <p className="text-sm text-gray-600">匯款完成後，請填入帳號後五碼：</p>
+                                            <input
+                                                type="text"
+                                                maxLength={5}
+                                                placeholder="例如：12345"
+                                                value={remitInputs[order.id] ?? ''}
+                                                onChange={e => setRemitInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                                className="w-full border rounded px-3 py-2 text-sm"
+                                            />
+                                            <button
+                                                onClick={() => submitRemit(order.id)}
+                                                disabled={
+                                                    remitSubmitting ||
+                                                    (remitInputs[order.id]?.trim().length ?? 0) !== 5
+                                                }
+                                                className="w-full py-2 bg-orange-500 text-white rounded text-sm disabled:opacity-40"
+                                            >送出匯款資訊</button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="bg-orange-50 rounded p-3 text-sm">
+                                        <p className="font-medium">請到現場以現金付款</p>
+                                        <p className="text-gray-500 mt-1">付款金額：NT$ {order.total_amount}</p>
+                                    </div>
+                                )}
                             </div>
                         )}
+
                         {order.status === 'payment_submitted' && order.remit_last5 && (
                             <p className="text-xs text-purple-500">已收到您的匯款後五碼：{order.remit_last5}</p>
                         )}
