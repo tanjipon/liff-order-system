@@ -86,4 +86,51 @@ describe('create_order DB Function', () => {
 
         expect(error?.message).toContain('SESSION_NOT_ACTIVE')
     })
+
+    it('pickup_fee snapshot: pickup_fee correctly insert into orders', async () => {
+        const { data: orderId } = await supabase.rpc('create_order', {
+            p_session_id:       SESSION_ID,
+            p_line_user_id:     'U_test_005',
+            p_display_name:     'test_user',
+            p_items:            [{ product_id: PRODUCT_ID, quantity: 1 }],
+            p_pickup_option_id: PICKUP_OPTION_ID,
+            p_payment_method:   'bank_transfer',
+        })
+
+        const { data: order } = await supabase
+            .from('orders')
+            .select('pickup_fee, pickup_option_id')
+            .eq('id', orderId)
+            .single()
+
+        // extra_fee in pickup option should snapshot to orders.pickup_fee
+        expect(order?.pickup_option_id).toBe(PICKUP_OPTION_ID)
+        expect(typeof order?.pickup_fee).toBe('number')
+    })
+
+    it('pay in cash normal order', async () => {
+        const { error } = await supabase.rpc('create_order', {
+            p_session_id:       SESSION_ID,
+            p_line_user_id:     'U_test_006',
+            p_display_name:     'test_user',
+            p_items:            [{ product_id: PRODUCT_ID, quantity: 1 }],
+            p_pickup_option_id: PICKUP_OPTION_ID,
+            p_payment_method:   'cash',
+        })
+
+        expect(error).toBeNull()
+    })
+
+    it('PICKUP_OPTION_NOT_FOUND: pickup option not exist', async () => {
+        const { error } = await supabase.rpc('create_order', {
+            p_session_id:       SESSION_ID,
+            p_line_user_id:     'U_test_007',
+            p_display_name:     'test_user',
+            p_items:            [{ product_id: PRODUCT_ID, quantity: 1 }],
+            p_pickup_option_id: '00000000-0000-0000-0000-000000000000',
+            p_payment_method:   'bank_transfer',
+        })
+
+        expect(error?.message).toContain('PICKUP_OPTION_NOT_FOUND')
+    })
 })
