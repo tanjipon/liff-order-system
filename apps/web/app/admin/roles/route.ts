@@ -29,3 +29,30 @@ export async function GET(req: NextRequest) {
         return errorResponse(e.message)
     }
 }
+
+export async function POST(req: NextRequest) {
+    try {
+        const ctx = await verifyAdmin(req)
+        assertPermission(ctx, 'roles:manage')
+
+        const supabase = getSupabaseAdmin()
+        const { name } = await req.json()
+
+        if (!name) return errorResponse('MISSING_FIELDS', 400)
+
+        const { data, error } = await supabase
+            .from('roles')
+            .insert({ name })
+            .select('id')
+            .single()
+
+        if (error) {
+            if (error.code === '23505') return errorResponse('ROLE_ALREADY_EXISTS', 400)
+            throw new Error(error.message)
+        }
+
+        return Response.json({ data: { roleId: data.id } }, { status: 201 })
+    } catch (e: any) {
+        return errorResponse(e.message)
+    }
+}
