@@ -25,14 +25,13 @@ export async function GET (req: NextRequest) {
         if (error) throw new Error(error.message)
 
         // 2. check auth.users to get email
-        const userIds = (userRoles ?? []).map(r => r.user_id)
         const { data: { users }, error: authError } = 
             await supabase.auth.admin.listUsers()
 
         if (authError) throw new Error(authError.message)
 
         const emailMap = Object.fromEntries(
-            userIds.map(u => [u.id, u.email ?? ''])
+            users.map(u => [u.id, u.email ?? ''])
         )
 
         // 3. merge
