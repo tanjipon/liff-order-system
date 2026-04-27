@@ -2,6 +2,7 @@ alter table sessions    enable row level security;
 alter table products    enable row level security;
 alter table orders      enable row level security;
 alter table order_items enable row level security;
+alter table pickup_options enable row level security;
 
 -- sessions: everyone can read active session
 create policy "sessions_select_active"
@@ -40,6 +41,11 @@ create policy "order_items_select_own"
             where line_user_id = current_setting('app.current_line_user_id', true)
         )
     );
+
+-- pickup_options: all users can select
+create policy "pickup_options_select_all"
+    on pickup_options for select
+    using (true);
 
 alter table roles            enable row level security;
 alter table permissions      enable row level security;
