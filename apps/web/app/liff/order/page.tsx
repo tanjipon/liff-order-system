@@ -261,5 +261,66 @@ export default function OrderPage() {
         )
     }
 
+    // step 4: confirm order
+    if (step === 'confirm') {
+        const pickupFee = selectedPickup?.extra_fee ?? 0
+        const totalAmount = itemSubtotal + pickupFee
+
+        return (
+            <div className="p-4 max-w-md mx-auto">
+                <button onClick={() => setStep('payment')} className="text-sm text-gray-500 mb-4">← 返回</button>
+                <h2 className="text-xl font-bold mb-4">確認訂單</h2>
+
+                {/* products reciept */}
+                <div className="border rounded-lg p-4 space-y-2 mb-4">
+                    <h3 className="font-medium text-sm text-gray-500 mb-2">商品明細</h3>
+                    {session!.products
+                        .filter(p => (quantities[p.id] ?? 0) > 0)
+                        .map(p => (
+                            <div key={p.id} className="flex justify-between text-sm">
+                                <span>{p.name} × {quantities[p.id]}</span>
+                                <span>NT$ {p.price * quantities[p.id]}</span>
+                            </div>
+                        ))
+                    }
+                </div>
+
+                {/* fee overview */}
+                <div className="border rounded-lg p-4 space-y-2 mb-4">
+                    <div className="flex justify-between text-sm">
+                        <span>商品小計</span>
+                        <span>NT$ {itemSubtotal}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                        <span>取貨方式：{selectedPickup?.name}</span>
+                        <span>{pickupFee > 0 ? `NT$ ${pickupFee}` : '免費'}</span>
+                    </div>
+                    <div className="flex justify-between font-bold border-t pt-2 mt-2">
+                        <span>總金額</span>
+                        <span>NT$ {totalAmount}</span>
+                    </div>
+                </div>
+
+                {/* payment method */}
+                <div className="border rounded-lg p-4 mb-6">
+                    <p className="text-sm text-gray-500">付款方式</p>
+                    <p className="font-medium mt-1">
+                        {selectedPayment === 'bank_transfer' ? '銀行匯款' : '現金付款'}
+                    </p>
+                </div>
+
+                {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+
+                <button
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    className="w-full py-3 bg-green-500 text-white rounded-lg font-bold disabled:opacity-40"
+                >
+                    {submitting ? '送出中...' : '確認送出'}
+                </button>
+            </div>
+        )
+    }
+
     return null
 }
