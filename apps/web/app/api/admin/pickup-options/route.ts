@@ -22,3 +22,33 @@ export async function GET(req: NextRequest) {
         return errorResponse(e.message)
     }
 }
+
+export async function POST(req: NextRequest) {
+    try {
+        const ctx = await verifyAdmin(req)
+        assertPermission(ctx, 'pickup_options:manage')
+
+        const supabase = getSupabaseAdmin()
+        const { name, description, extraFee, allowedPaymentMethods } = await req.json()
+
+        if (!name) return errorResponse('MISSING_FIELDS', 400)
+
+        const { data, error } = await supabase
+            .from('pickup_options')
+            .insert({
+                name,
+                description:              description ?? null,
+                extra_fee:                extraFee ?? 0,
+                allowed_payment_methods:  allowedPaymentMethods ?? null,
+            })
+            .select('id')
+            .single()
+
+        if (error) throw new Error(error.message)
+
+        return Response.json({ data: { pickupOptionId: data.id } }, { status: 201 })
+    } catch (e: any) {
+        return errorResponse(e.message)
+    }
+}
+
