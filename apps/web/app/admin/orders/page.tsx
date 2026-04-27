@@ -19,21 +19,21 @@ type Order = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-    pending:           '待確認',
-    in_production:     '製作中',
-    pending_payment:   '待付款',
+    pending: '待確認',
+    in_production: '製作中',
+    pending_payment: '待付款',
     payment_submitted: '付款確認中',
-    completed:         '已完成',
-    cancelled:         '已取消',
+    completed: '已完成',
+    cancelled: '已取消',
 }
 
 const STATUS_COLOR: Record<string, string> = {
-    pending:           'bg-yellow-100 text-yellow-700',
-    in_production:     'bg-blue-100 text-blue-700',
-    pending_payment:   'bg-orange-100 text-orange-700',
+    pending: 'bg-yellow-100 text-yellow-700',
+    in_production: 'bg-blue-100 text-blue-700',
+    pending_payment: 'bg-orange-100 text-orange-700',
     payment_submitted: 'bg-purple-100 text-purple-700',
-    completed:         'bg-green-100 text-green-700',
-    cancelled:         'bg-gray-100 text-gray-500',
+    completed: 'bg-green-100 text-green-700',
+    cancelled: 'bg-gray-100 text-gray-500',
 }
 
 export default function OrderHistoryPage() {
@@ -48,15 +48,33 @@ export default function OrderHistoryPage() {
     async function handleSearch() {
         setLoading(true)
         const params = new URLSearchParams({ history: 'true' })
-        if (status)   params.set('status', status)
+        if (status) params.set('status', status)
         if (dateFrom) params.set('dateFrom', dateFrom)
-        if (dateTo)   params.set('dateTo', dateTo)
+        if (dateTo) params.set('dateTo', dateTo)
 
         const res = await adminFetch(`/api/admin/orders?${params}`)
         const body = await res.json()
         setOrders(body.data ?? [])
         setLoading(false)
         setSearched(true)
+    }
+
+    async function handleExport() {
+        const params = new URLSearchParams()
+        if (status) params.set('status', status)
+        if (dateFrom) params.set('dateFrom', dateFrom)
+        if (dateTo) params.set('dateTo', dateTo)
+
+        const res = await adminFetch(`/api/admin/orders/export?${params}`)
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'orders.csv'
+        a.click()
+
+        URL.revokeObjectURL(url)
     }
 
     return (
@@ -97,6 +115,13 @@ export default function OrderHistoryPage() {
                     className="px-4 py-2 bg-blue-500 text-white rounded text-sm disabled:opacity-50"
                 >
                     {loading ? '查詢中...' : '查詢'}
+                </button>
+                <button
+                    onClick={handleExport}
+                    disabled={!searched || loading}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded text-sm disabled:opacity-50"
+                >
+                    匯出 CSV
                 </button>
             </div>
 
