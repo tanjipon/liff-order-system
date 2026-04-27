@@ -129,6 +129,9 @@ export default function SessionDetailPage() {
                 <Link href={`/admin/sessions/${id}/edit`} className="text-sm text-gray-500 border rounded px-3 py-1">
                     編輯開單
                 </Link>
+                <Link href={`/admin/sessions/${id}/stats`} className="text-sm text-gray-500 border rounded px-3 py-1">
+                    查看統計
+                </Link>
                 <div className="text-sm text-gray-500 mt-1 space-y-0.5">
                     {session.opens_at && (
                         <p>開放時間：{new Date(session.opens_at).toLocaleString('zh-TW')}</p>
