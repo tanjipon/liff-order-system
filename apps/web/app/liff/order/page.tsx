@@ -218,5 +218,48 @@ export default function OrderPage() {
         </div>
     )
 
+    // step 3: choose payment method
+    if (step === 'payment') {
+        // filter mayment methods by pickup options
+        const availablePayments: { value: 'bank_transfer' | 'cash'; label: string }[] = (
+            [
+                { value: 'bank_transfer', label: '銀行匯款' },
+                { value: 'cash',          label: '現金付款' },
+            ] as const
+        ).filter(p =>
+            !selectedPickup?.allowed_payment_methods ||
+            selectedPickup.allowed_payment_methods.includes(p.value)
+        )
+
+        return (
+            <div className="p-4 max-w-md mx-auto">
+                <button onClick={() => setStep('pickup')} className="text-sm text-gray-500 mb-4">← 返回</button>
+                <h2 className="text-xl font-bold mb-4">選擇付款方式</h2>
+                <div className="space-y-3">
+                    {availablePayments.map(p => (
+                        <button
+                            key={p.value}
+                            onClick={() => setSelectedPayment(p.value)}
+                            className={`w-full text-left border rounded-lg p-4 font-medium ${
+                                selectedPayment === p.value
+                                    ? 'border-green-500 bg-green-50'
+                                    : 'border-gray-200'
+                            }`}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
+                <button
+                    onClick={() => setStep('confirm')}
+                    disabled={!selectedPayment}
+                    className="mt-6 w-full py-3 bg-green-500 text-white rounded-lg font-bold disabled:opacity-40"
+                >
+                    下一步：確認訂單
+                </button>
+            </div>
+        )
+    }
+
     return null
 }
