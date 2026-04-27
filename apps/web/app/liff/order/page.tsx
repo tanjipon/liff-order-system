@@ -16,15 +16,27 @@ type Session = {
     products: Product[]
 }
 
-export default function OderPage() {
+type PickupOption = {
+    id: string
+    name: string
+    description: string | null
+    extra_fee: number
+    allowed_payment_methods: string[] | null
+}
+
+export default function OrderPage() {
     const [session, setSession] = useState<Session | null>(null)
     const [quantities, setQuantities] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
     const [submitting, setSubmitting] = useState(false)
     const [orderId, setOrderId] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
-
     const [quotaUsed, setQuotaUsed] = useState(0)
+
+    const [step, setStep] = useState<'items' | 'pickup' | 'payment' | 'confirm'>('items')
+    const [pickupOptions, setPickupOptions] = useState<PickupOption[]>([])
+    const [selectedPickup, setSelectedPickup] = useState<PickupOption | null>(null)
+    const [selectedPayment, setSelectedPayment] = useState<'bank_transfer' | 'cash' | null>(null)
 
     useEffect(() => {
         fetch('/api/sessions/active')
@@ -33,15 +45,10 @@ export default function OderPage() {
                 if (body.data) {
                     setSession(body.data)
                     const init: Record<string, number> = {}
-                    body.data.products.forEach((p: Product) => {
-                        init[p.id] = 0
-                    })
+                    body.data.products.forEach((p: Product) => { init[p.id] = 0 })
                     setQuantities(init)
 
-                    // calculate used quota
-                    fetch('/api/orders', {
-                        headers: { 'x-liff-token': 'mock-token' },
-                    })
+                    fetch('/api/orders', { headers: { 'x-liff-token': 'mock-token' } })
                         .then(res => res.json())
                         .then(body => {
                             if (body.data) {
@@ -60,6 +67,15 @@ export default function OderPage() {
             .finally(() => setLoading(false))
     }, [])
 
+    // load in pickup step
+    useEffect(() => {
+        if (step === 'pickup' && pickupOptions.length === 0) {
+            fetch('/api/pickup-options')
+                .then(res => res.json())
+                .then(body => setPickupOptions(body.data ?? []))
+        }
+    }, [step])
+
     function updateQuantity(productId: string, delta: number, maxStock: number) {
         setQuantities(prev => {
             const current = prev[productId] ?? 0
@@ -70,16 +86,16 @@ export default function OderPage() {
 
     const totalItems = Object.values(quantities).reduce((sum, q) => sum + q, 0)
     const totalSelected = totalItems + quotaUsed
-    const totalAmount = session?.products.reduce(
+    const itemSubtotal = session?.products.reduce(
         (sum, p) => sum + p.price * (quantities[p.id] ?? 0), 0
     ) ?? 0
 
     if (loading) return <div className="p-4">載入中</div>
-    if (error) return <div className='p-4 text-red-500'>{error}</div>
+    if (error)   return <div className="p-4 text-red-500">{error}</div>
 
     if (orderId) return (
         <div className="p-4 max-w-md mx-auto text-center">
-            <div className="text-4xl mb-4"></div>
+            <div className="text-4xl mb-4">✅</div>
             <h2 className="text-xl font-bold mb-2">訂單已送出</h2>
             <p className="text-gray-500 text-sm">訂單編號</p>
             <p className="font-mono text-xs text-gray-400 mt-1 break-all">{orderId}</p>
@@ -89,28 +105,25 @@ export default function OderPage() {
     if (!session) return null
 
     async function handleSubmit() {
-        if (totalItems === 0) return
-
         setSubmitting(true)
         try {
             const res = await fetch('/api/orders', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-liff-token': 'mock-token', // change to real token after LIFF integrated
+                    'x-liff-token': 'mock-token',
                 },
                 body: JSON.stringify({
                     sessionId: session!.id,
                     items: session!.products
-                        .filter(p => (quantities[p.id]) ?? 0 > 0)
+                        .filter(p => (quantities[p.id] ?? 0) > 0)
                         .map(p => ({ product_id: p.id, quantity: quantities[p.id] })),
-                    pickupOptionId: 'cccccccc-0000-0000-0000-000000000001', // user's choice after M7
-                    paymentMethod: 'bank_transfer' // user's choice after M7
+                    pickupOptionId: selectedPickup!.id,
+                    paymentMethod:  selectedPayment!,
                 })
             })
-
             const body = await res.json()
-            if (!res.ok) throw new Error(body.message ?? '訂單送出失敗')
+            if (!res.ok) throw new Error(body.error ?? '訂單送出失敗')
             setOrderId(body.data.orderId)
         } catch (e: any) {
             setError(e.message)
@@ -119,60 +132,91 @@ export default function OderPage() {
         }
     }
 
-    return (
+    // step 1: pick product
+    if (step === 'items') return (
         <div className="p-4 max-w-md mx-auto">
             <h1 className="text-xl font-bold mb-4">{session.title}</h1>
             {session.per_person_limit && (
-                <div className={`text-sm mb-4 p-2 rounded ${totalSelected >= session.per_person_limit
+                <div className={`text-sm mb-4 p-2 rounded ${
+                    totalSelected >= session.per_person_limit
                         ? 'bg-red-50 text-red-600'
                         : 'bg-gray-50 text-gray-500'
-                    }`}>
-                    每人限購 {session.per_person_limit} 件
-                    已選 {totalSelected} 件
+                }`}>
+                    每人限購 {session.per_person_limit} 件・已選 {totalSelected} 件
                 </div>
             )}
-
             <div className="space-y-4">
                 {session.products.map(product => (
-                    <div
-                        key={product.id}
-                        className="flex items-center justify-between border rounded p-3"
-                        data-testid={`product-${product.id}`}
-                    >
+                    <div key={product.id} className="flex items-center justify-between border rounded p-3">
                         <div>
                             <p className="font-medium">{product.name}</p>
                             <p className="text-sm text-gray-500">NT$ {product.price}</p>
                             <p className="text-xs text-gray-400">庫存 {product.stock_qty}</p>
                         </div>
-                        <div className='flex items-center gap-2'>
-                            <button
-                                onClick={() => updateQuantity(product.id, -1, product.stock_qty)}
-                                className="w-8 h-8 rounded-full border text-lg"
-                            >-</button>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => updateQuantity(product.id, -1, product.stock_qty)}
+                                className="w-8 h-8 rounded-full border text-lg">-</button>
                             <span className="w-6 text-center">{quantities[product.id] ?? 0}</span>
-                            <button
-                                onClick={() => updateQuantity(product.id, 1, product.stock_qty)}
+                            <button onClick={() => updateQuantity(product.id, 1, product.stock_qty)}
                                 disabled={
                                     (quantities[product.id] ?? 0) >= product.stock_qty ||
                                     (session.per_person_limit !== null && totalSelected >= session.per_person_limit)
                                 }
-                                className="w-8 h-8 rounded-full border text-lg disabled:opacity-40"
-                            >+</button>
+                                className="w-8 h-8 rounded-full border text-lg disabled:opacity-40">+</button>
                         </div>
                     </div>
                 ))}
             </div>
-
             <div className="mt-6 border-t pt-4">
-                <p className="text-right font-bold">小計：NT$ {totalAmount}</p>
+                <p className="text-right font-bold">小計：NT$ {itemSubtotal}</p>
             </div>
             <button
-                onClick={handleSubmit}
-                disabled={totalItems === 0 || submitting}
+                onClick={() => setStep('pickup')}
+                disabled={totalItems === 0}
                 className="mt-4 w-full py-3 bg-green-500 text-white rounded-lg font-bold disabled:opacity-40"
             >
-                {submitting ? '送出中' : `送出訂單 (${totalItems} 件)`}
+                下一步：選擇取貨方式
             </button>
         </div>
     )
+
+    // step 2: pick pickup option
+    if (step === 'pickup') return (
+        <div className="p-4 max-w-md mx-auto">
+            <button onClick={() => setStep('items')} className="text-sm text-gray-500 mb-4">← 返回</button>
+            <h2 className="text-xl font-bold mb-4">選擇取貨方式</h2>
+            <div className="space-y-3">
+                {pickupOptions.map(option => (
+                    <button
+                        key={option.id}
+                        onClick={() => setSelectedPickup(option)}
+                        className={`w-full text-left border rounded-lg p-4 ${
+                            selectedPickup?.id === option.id
+                                ? 'border-green-500 bg-green-50'
+                                : 'border-gray-200'
+                        }`}
+                    >
+                        <div className="flex justify-between items-center">
+                            <p className="font-medium">{option.name}</p>
+                            <p className="text-sm text-gray-500">
+                                {option.extra_fee > 0 ? `+NT$ ${option.extra_fee}` : '免費'}
+                            </p>
+                        </div>
+                        {option.description && (
+                            <p className="text-sm text-gray-400 mt-1">{option.description}</p>
+                        )}
+                    </button>
+                ))}
+            </div>
+            <button
+                onClick={() => setStep('payment')}
+                disabled={!selectedPickup}
+                className="mt-6 w-full py-3 bg-green-500 text-white rounded-lg font-bold disabled:opacity-40"
+            >
+                下一步：選擇付款方式
+            </button>
+        </div>
+    )
+
+    return null
 }
