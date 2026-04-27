@@ -1,7 +1,7 @@
 # 甜點工作室訂購系統規格書
 
-**版本：** v1.3  
-**最後更新：** 2025-06  
+**版本：** v1.5  
+**最後更新：** 2026-04  
 **性質：** 個人工作室，非正式公司
 
 **v1.1 異動說明：** 同步 implementation v1.3 的設計決策。新增 RBAC 系統（人員管理、角色管理）、`per_person_limit` 支援 NULL 無上限、後台驗證改為 Supabase Auth + RBAC、開發排程更新至六週。
@@ -9,6 +9,10 @@
 **v1.2 異動說明：** 新增現金付款方式、取貨方式管理功能。`orders` 表新增 `payment_method`、`pickup_option_id`、`pickup_fee` 欄位；新增 `pickup_options` 表；狀態機補充現金付款可跳過 `payment_submitted`；新增 `pickup_options:manage` 權限項目；開發排程更新至七週。
 
 **v1.3 異動說明：** 新增 Session 預設開搶時間與追加庫存排程功能。`sessions` 表的 `opens_at` / `closes_at` 正式驅動開放判斷邏輯，不再依賴純手動的 `is_active`；新增 `session_restocks` 與 `restock_items` 兩張表；`create_order` DB Function 於下單前惰性套用到期的 restock；後台新增追加庫存排程 UI；LIFF 客戶端顯示倒數與追加庫存預告；新增 `restocks:manage` 權限項目；開發排程更新至八週。
+
+**v1.5 異動說明：** 新增商品個別購買上限。`products` 表新增 `max_per_person`（NULL = 不限）；與 `sessions.per_person_limit` 並存，各自獨立控制；`create_order` 加入 per-product quota 檢查；新增錯誤碼 `PRODUCT_QUOTA_EXCEEDED`；後台商品表單與 LIFF 選購頁同步更新；新增 M9 Milestone。
+
+**v1.4 異動說明：** 調整 restock 套用機制為**主動觸發 + 惰性備援**雙層架構。客戶進入 session 頁面時，系統主動呼叫 `apply_pending_restocks()` 套用到期 restock，確保頁面載入即看到最新庫存；API 回傳 `next_restock_at`，前端在庫存歸零時顯示倒數計時器，時間到自動刷新庫存。`create_order` 內保留惰性套用作為雙重保護。
 
 ---
 
@@ -107,6 +111,7 @@
 | name | text | 商品名稱 |
 | price | int | 單價（新台幣） |
 | stock_qty | int | 剩餘庫存數量 |
+| max_per_person | int | 此商品每人購買上限（件）；`NULL` 表示不限 |
 
 #### orders（訂單）
 
@@ -206,7 +211,11 @@
 
 ### 3.2 防黃牛 Quota 計算
 
-同一 session 內，依 LINE ID 累加非取消狀態的訂購數量：
+系統有兩層獨立的購買限制，下單時兩層都必須通過：
+
+**層一：Session 總件數上限（`sessions.per_person_limit`）**
+
+同一 session 內，依 LINE ID 累加非取消狀態的**跨商品總數量**：
 
 ```sql
 SELECT COALESCE(SUM(oi.quantity), 0)
@@ -217,9 +226,25 @@ WHERE o.session_id = $session_id
   AND o.status != 'cancelled'
 ```
 
+**層二：商品個別上限（`products.max_per_person`）**
+
+針對**每個商品**，依 LINE ID 累加非取消狀態的**單品數量**：
+
+```sql
+SELECT COALESCE(SUM(oi.quantity), 0)
+FROM orders o
+JOIN order_items oi ON oi.order_id = o.id
+WHERE o.session_id = $session_id
+  AND o.line_user_id = $line_user_id
+  AND o.status != 'cancelled'
+  AND oi.product_id = $product_id
+```
+
+**共同規則：**
 - `cancelled` → 釋放 quota，客戶可在同一 session 重新下單
 - `completed` → 計入 quota，不重新開放
-- `per_person_limit` 為 `NULL` → 跳過 quota 檢查，不限購
+- 欄位為 `NULL` → 跳過該層檢查，不限購
+- 兩層各自獨立：通過 session limit 不代表通過 product limit，反之亦然
 
 ### 3.3 總金額計算
 
@@ -289,8 +314,8 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 1. 點擊 LINE 群組內的訂購連結
 2. LIFF 開啟，自動取得 LINE ID（無需另外登入）
 3. 若 session 尚未到 `opens_at`，顯示倒數計時，商品清單可見但無法送出
-4. 開搶時間到後按鈕自動解鎖，系統檢查 LINE ID 是否超過購買上限
-5. 瀏覽商品，選擇品項與數量（庫存為 0 時，若有排程中的 restock 顯示「追加庫存將於 XX:XX 開放」）
+4. 開搶時間到後按鈕自動解鎖，系統檢查 LINE ID 是否超過購買上限（session 總件數 + 各商品個別上限）
+5. 瀏覽商品，選擇品項與數量（系統已在頁面載入時主動套用到期 restock；單品設有 `max_per_person` 時，數量選擇器自動限制上限並顯示提示；庫存為 0 時，若 `next_restock_at` 有值則顯示「追加庫存將於 XX:XX 開放」倒數，時間到自動刷新庫存；無排程則顯示「已售完」）
 6. 選擇取貨方式（顯示名稱、說明、費用）
 7. 選擇付款方式（依取貨方式的 `allowed_payment_methods` 過濾可選項）
 8. 確認頁顯示：商品小計 + 取貨費用 + 總金額
@@ -305,7 +330,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 
 ### 5.2 老闆後台流程
 
-1. 新增 session（開單名稱、品項、庫存、每人限購、**開搶時間**）
+1. 新增 session（開單名稱、品項、庫存、**商品個別限購**、每人總件數限購、**開搶時間**）
 2. 複製 LIFF 連結，提前貼至 LINE 群組，客戶可看到倒數
 3. 到開搶時間後，系統自動開放下單（`opens_at <= now()`）
 4. 後台查看「待確認」訂單列表，審核產能
@@ -314,7 +339,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 7. 等待客戶填入匯款後五碼 / 現場收現
 8. 核對確認後點擊「確認收款」（→ `completed`）
 9. 若需取消（`in_production` 或 `pending_payment`），填寫原因後取消，系統自動釋放庫存與 quota
-10. **若需追加庫存**：在開單詳情頁新增追加庫存排程，設定開搶時間與各商品追加數量；時間到後第一筆下單自動觸發套用
+10. **若需追加庫存**：在開單詳情頁新增追加庫存排程，設定開搶時間與各商品追加數量；時間到後客戶重新進入頁面即自動套用（主動觸發），或最晚於下一筆下單時套用（惰性備援）
 
 ---
 
@@ -433,7 +458,11 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 
 **取消排程：** 僅限「待套用」狀態。套用後不可取消。
 
-**套用機制：** 不依賴 cron job，由下單行為惰性觸發。當客戶下單時，`create_order` 在庫存扣除前自動套用所有時間已到且未套用的 restock。若庫存到期後無人下單，restock 停留在「待套用」，不影響系統運作。
+**套用機制：** 採**主動觸發 + 惰性備援**雙層架構，不依賴 cron job。
+
+- **主動觸發（優先）**：客戶進入 LIFF 訂購頁時，前端呼叫 `GET /api/sessions/active`，後端主動執行 `apply_pending_restocks(session_id)`，套用所有時間已到且未套用的 restock，並回傳 `next_restock_at`（下一波待套用 restock 的開放時間）。客戶看到的庫存數量已是套用後的最新狀態。
+- **惰性備援（防護）**：`create_order` 在庫存扣除前仍保留惰性套用邏輯，處理極端情況（如客戶長時間停留在頁面後直接送出，未再次拉取最新 session 資料）。
+- **並發保護**：兩個套用路徑皆以 `FOR UPDATE` 鎖定 `session_restocks` 列，確保同一 restock 不會被重複套用。
 
 ---
 
@@ -443,8 +472,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 
 | 端點 | 方法 | 說明 |
 |------|------|------|
-| `/sessions/active` | GET | 取得目前開放或即將開放的 session（含 `opens_at` 供前端倒數） |
-| `/sessions/:id/restocks` | GET | 取得此 session 排程中（待套用）的 restock 預告，供 LIFF 顯示追加庫存提示 |
+| `/sessions/active` | GET | 取得目前開放或即將開放的 session；後端主動套用到期 restock 後回傳；response 含 `next_restock_at`（下一波追加庫存時間，`null` 表示無排程） |
 | `/orders` | POST | 建立新訂單 |
 | `/orders?line_user_id=xxx` | GET | 查詢自己的訂單列表 |
 | `/orders/:id/remit` | PATCH | 填入匯款後五碼 |
@@ -525,3 +553,4 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | 第六週 | 後台人員管理、角色管理與權限勾選 | 老闆自主管理帳號 |
 | 第七週 | 後台取貨方式管理（新增、編輯、上下架、排序） | 老闆自主管理取貨選項 |
 | 第八週 | 後台追加庫存排程管理（新增、查看、取消）、LIFF 追加庫存提示 | 老闆可排程追加庫存 |
+| 第九週 | products.max_per_person 欄位、create_order 商品 quota 檢查、後台表單與 LIFF 選購頁限制 | 熱門商品公平分配 |

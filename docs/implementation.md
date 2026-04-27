@@ -1,7 +1,7 @@
 # 甜點工作室訂購系統｜實作細節與 GitHub Project 規劃
 
-**版本：** v1.5  
-**依據：** dessert-shop-spec.md v1.3  
+**版本：** v1.7  
+**依據：** dessert-shop-spec.md v1.5  
 **原則：** 最佳軟體工程實踐、單人開發、零成本部署
 
 **v1.1 異動說明：** 依據 DB Function vs Backend Logic 分析結果，調整業務邏輯分層。僅保留真正需要原子性保證的操作於 DB Function（`create_order`、`admin_cancel_order`），其餘狀態轉移邏輯移至 Backend，提升可讀性與可測試性。
@@ -13,6 +13,10 @@
 **v1.4 異動說明：** 新增現金付款方式與取貨方式管理功能。`orders` 表新增 `payment_method`、`pickup_option_id`、`pickup_fee` 三個欄位；新增 `pickup_options` 表；`create_order` DB Function 更新以支援取貨費用快照；狀態機新增現金付款跳過 `payment_submitted` 的路徑；RBAC seed 新增 `pickup_options:manage` 權限；新增 M7 Milestone。
 
 **v1.5 異動說明：** 新增 Session 預設開搶時間與追加庫存排程功能。Session 開放判斷改為時間條件驅動（`opens_at / closes_at`）；新增 `session_restocks` 與 `restock_items` 表；`create_order` DB Function 於庫存扣除前惰性套用到期 restock；RBAC seed 新增 `restocks:manage` 權限；新增 M8 Milestone。
+
+**v1.7 異動說明：** 新增商品個別購買上限功能。`products` 表新增 `max_per_person int`（NULL = 不限）；`create_order` DB Function 在庫存扣除前加入 per-product quota 檢查；新增錯誤碼 `PRODUCT_QUOTA_EXCEEDED`；後台新增/編輯商品表單新增欄位；LIFF 選購頁依 `max_per_person` 限制單品數量選擇器；新增 M9 Milestone。
+
+**v1.6 異動說明：** 調整 restock 套用機制。改為**主動觸發 + 惰性備援**雙層架構：新增 `apply_pending_restocks(session_id)` DB Function，由 `GET /api/sessions/active` 在回傳前主動呼叫，確保客戶進入頁面時即看到最新庫存；Function 同時回傳下一波 restock 的 `next_restock_at`，讓前端在庫存歸零時顯示倒數計時器，時間到自動重新拉取庫存。`create_order` 內的惰性套用邏輯保留作為雙重保護。M8 Issue 清單依此機制調整。
 
 ---
 
@@ -161,12 +165,13 @@ create table sessions (
 
 -- products
 create table products (
-  id         uuid primary key default uuid_generate_v4(),
-  session_id uuid not null references sessions(id) on delete cascade,
-  name       text not null,
-  price      int not null check (price >= 0),
-  stock_qty  int not null check (stock_qty >= 0),
-  created_at timestamptz not null default now()
+  id             uuid primary key default uuid_generate_v4(),
+  session_id     uuid not null references sessions(id) on delete cascade,
+  name           text not null,
+  price          int not null check (price >= 0),
+  stock_qty      int not null check (stock_qty >= 0),
+  max_per_person int check (max_per_person > 0),  -- NULL = 不限；有值時必須 > 0
+  created_at     timestamptz not null default now()
 );
 
 -- orders
@@ -411,12 +416,13 @@ where key in (
 
 ### 3.3 Migration 003 — Database Functions
 
-只保留**真正需要原子性保證**的兩個 function。其餘狀態轉移邏輯移至 Backend（見第 4 節）。
+只保留**真正需要原子性保證**的 function。其餘狀態轉移邏輯移至 Backend（見第 4 節）。
 
 | Function | 位置 | 理由 |
 |----------|------|------|
 | `create_order` | DB Function | 多步驟 transaction + 庫存 `FOR UPDATE` 鎖定，放 DB 防止 race condition |
 | `admin_cancel_order` | DB Function | 連鎖釋放庫存 + quota，transaction 保證必要 |
+| `apply_pending_restocks` | DB Function | `FOR UPDATE` 鎖定防止並發重複套用；回傳 `next_restock_at` 供前端倒數 |
 | `admin_accept_order` | **Backend** | 單純狀態更新 + 排單號計算，無需原子性，放 Backend 提升可測試性 |
 | 其他狀態轉移 | **Backend** | 純狀態驗證，易 unit test，不需 DB |
 
@@ -425,6 +431,7 @@ where key in (
 
 -- (A) 建立訂單（含庫存扣除 + quota 檢查 + 取貨費用快照）
 -- 需要 DB Function：多品項庫存鎖定（FOR UPDATE）+ quota + order_items 必須原子完成
+-- 注意：Step 5 的 restock 惰性套用保留作為雙重保護；主動套用已由 apply_pending_restocks 完成
 create or replace function create_order(
   p_session_id       uuid,
   p_line_user_id     text,
@@ -434,15 +441,16 @@ create or replace function create_order(
   p_payment_method   payment_method_enum
 ) returns uuid language plpgsql as $$
 declare
-  v_order_id      uuid;
-  v_total         int := 0;
-  v_quota_used    int;
-  v_quota_limit   int;
-  v_new_qty       int;
-  v_item          jsonb;
-  v_product       record;
-  v_pickup        record;
-  v_restock       record;
+  v_order_id         uuid;
+  v_total            int := 0;
+  v_quota_used       int;
+  v_quota_limit      int;
+  v_new_qty          int;
+  v_item             jsonb;
+  v_product          record;
+  v_pickup           record;
+  v_restock          record;
+  v_product_qty_used int;
 begin
   -- 1. 檢查 session 是否開放（時間條件 + is_active 雙重驗證）
   select per_person_limit into v_quota_limit
@@ -539,6 +547,21 @@ begin
       raise exception 'INSUFFICIENT_STOCK:%', v_product.name;
     end if;
 
+    -- 商品個別 quota 檢查（NULL 表示不限）
+    if v_product.max_per_person is not null then
+      select coalesce(sum(oi.quantity), 0) into v_product_qty_used
+      from orders o
+      join order_items oi on oi.order_id = o.id
+      where o.session_id = p_session_id
+        and o.line_user_id = p_line_user_id
+        and o.status != 'cancelled'
+        and oi.product_id = v_product.id;
+
+      if (v_product_qty_used + (v_item->>'quantity')::int) > v_product.max_per_person then
+        raise exception 'PRODUCT_QUOTA_EXCEEDED:%', v_product.name;
+      end if;
+    end if;
+
     update products
     set stock_qty = stock_qty - (v_item->>'quantity')::int
     where id = v_product.id;
@@ -563,7 +586,51 @@ begin
 end;
 $$;
 
--- (B) 後台取消訂單（連鎖釋放庫存 + quota）
+-- (B) 主動套用到期 restock（FOR UPDATE 防止並發重複套用）
+-- 由 GET /api/sessions/active 在回傳前呼叫，確保客戶進入頁面即看到最新庫存
+-- 回傳此 session 下一波尚未套用的 restock 開放時間（供前端倒數計時器使用）
+create or replace function apply_pending_restocks(
+  p_session_id uuid
+) returns timestamptz language plpgsql as $$
+declare
+  v_restock record;
+  v_next_at timestamptz;
+begin
+  -- 1. 套用所有時間已到且未套用的 restock（FOR UPDATE 防止並發重複套用）
+  for v_restock in
+    select sr.id
+    from session_restocks sr
+    where sr.session_id = p_session_id
+      and sr.is_active = true
+      and sr.applied = false
+      and sr.opens_at <= now()
+    order by sr.opens_at
+    for update of sr
+  loop
+    update products p
+    set stock_qty = p.stock_qty + ri.quantity
+    from restock_items ri
+    where ri.restock_id = v_restock.id
+      and ri.product_id = p.id;
+
+    update session_restocks
+    set applied = true
+    where id = v_restock.id;
+  end loop;
+
+  -- 2. 取得下一波尚未套用的 restock 時間（供前端倒數計時器）
+  select min(opens_at) into v_next_at
+  from session_restocks
+  where session_id = p_session_id
+    and is_active = true
+    and applied = false
+    and opens_at > now();
+
+  return v_next_at;  -- NULL 表示沒有待套用的排程
+end;
+$$;
+
+-- (C) 後台取消訂單（連鎖釋放庫存 + quota）
 -- 需要 DB Function：庫存釋放 + 狀態更新必須原子完成，避免庫存不一致
 create or replace function admin_cancel_order(
   p_order_id uuid,
@@ -883,6 +950,7 @@ export function errorResponse(code: string, status = 400) {
     FORBIDDEN:                         '無操作權限',
     ACCOUNT_DISABLED:                  '此帳號已停用，請聯絡管理員',
     QUOTA_EXCEEDED:                    '已超過本次開單每人購買上限',
+    PRODUCT_QUOTA_EXCEEDED:            '已超過此商品每人購買上限',
     INSUFFICIENT_STOCK:                '商品庫存不足',
     SESSION_NOT_ACTIVE:                '目前沒有開放中的開單',
     ORDER_NOT_FOUND:                   '找不到此訂單',
@@ -1104,8 +1172,12 @@ POST /api/orders（建立訂單）
   ✓ session closes_at 已過：回傳 SESSION_NOT_ACTIVE
   ✓ 超過 quota：回傳 QUOTA_EXCEEDED
   ✓ per_person_limit 為 null：不受 quota 限制
-  ✓ 庫存不足，但有到期 restock：restock 套用後庫存補充，下單成功
+  ✓ 庫存不足，但有到期 restock：create_order 內惰性套用後庫存補充，下單成功（備援路徑）
   ✓ 庫存不足，restock 尚未到期：回傳 INSUFFICIENT_STOCK
+  ✓ 商品設有 max_per_person，購買數量未超過：下單成功
+  ✓ 商品設有 max_per_person，本次購買超過上限：回傳 PRODUCT_QUOTA_EXCEEDED
+  ✓ 商品設有 max_per_person，累計歷史訂單後超過上限：回傳 PRODUCT_QUOTA_EXCEEDED
+  ✓ 商品 max_per_person 為 null：不受單品限制（搭配 session per_person_limit 正常運作）
   ✓ pickup_option 已下架：回傳 PICKUP_OPTION_NOT_FOUND
   ✓ 選擇現金但取貨方式只允許匯款：回傳 PAYMENT_METHOD_NOT_ALLOWED
   ✓ 同時兩筆訂單搶最後一個庫存：只有一筆成功（race condition）
@@ -1331,6 +1403,7 @@ jobs:
 | M6 — 人員與角色管理 | 人員帳號管理、角色新增、權限勾選 | 第 6 週 |
 | M7 — 取貨與付款方式 | pickup_options 管理、現金付款流程、LIFF 選購步驟 | 第 7 週 |
 | M8 — 開搶時間與追加庫存 | Session 時間條件開放、restock 排程、倒數 UI、追加庫存預告 | 第 8 週 |
+| M9 — 商品個別購買上限 | products.max_per_person、create_order 商品 quota 檢查、後台欄位、LIFF 選購限制 | 第 9 週 |
 
 ### 8.3 Issues 清單
 
@@ -1461,21 +1534,40 @@ jobs:
 
 #### M8 — 開搶時間與追加庫存排程
 
+restock 套用採**主動觸發 + 惰性備援**雙層架構：
+- **主動觸發**：客戶進入 session 頁面時，`GET /api/sessions/active` 呼叫 `apply_pending_restocks()`，套用到期 restock 並回傳 `next_restock_at`。
+- **惰性備援**：`create_order` 內保留原有的惰性套用邏輯，處理極端情況（API 呼叫失敗或直接呼叫下單 API 時）。
+
 ```
 [chore][layer: db]       #091 Migration 001 更新：session_restocks 與 restock_items 表
-[chore][layer: db]       #092 Migration 003 更新：create_order function 加入時間條件驗證與 restock 惰性套用
-[chore][layer: db]       #093 Migration 004 更新：RBAC seed 新增 restocks:manage 權限
-[type: feature][layer: api] #094 更新 API：GET /api/sessions/active 回傳 opens_at 供前端倒數
-[type: feature][layer: api] #095 API：GET /api/sessions/:id/restocks（客戶端取得待套用 restock 預告）
+[chore][layer: db]       #092 Migration 003 更新：create_order function 加入時間條件驗證與 restock 惰性套用（保留作為雙重保護）
+[chore][layer: db]       #093 Migration 003 新增：apply_pending_restocks(session_id) DB Function（FOR UPDATE 鎖定，回傳 next_restock_at）
+[chore][layer: db]       #094 Migration 004 更新：RBAC seed 新增 restocks:manage 權限
+[type: feature][layer: api] #095 更新 API：GET /api/sessions/active — 呼叫 apply_pending_restocks() 後回傳，response 新增 next_restock_at 欄位
 [type: feature][layer: api] #096 API：GET /admin/sessions/:id/restocks（assertPermission restocks:manage）
 [type: feature][layer: api] #097 API：POST /admin/sessions/:id/restocks（新增追加庫存排程）
 [type: feature][layer: api] #098 API：DELETE /admin/restocks/:id（取消待套用排程，applied = false 才允許）
 [type: test]             #099 Integration Test：create_order 時間條件驗證全案例（opens_at 未到 / 已過 closes_at）
-[type: test]             #100 Integration Test：restock 惰性套用全案例（正常套用 / 並發不重複套用 / applied 後無法取消）
+[type: test]             #100 Integration Test：apply_pending_restocks 全案例（正常套用 / 並發不重複套用 / next_restock_at 回傳正確 / applied 後無法取消）
 [type: feature][layer: frontend] #101 後台：新增開單表單加入開搶時間欄位
 [type: feature][layer: frontend] #102 後台：開單詳情頁追加庫存排程區塊（列表、新增、取消）
-[type: feature][layer: frontend] #103 LIFF 訂購頁：開搶倒數 UI（時間到自動解鎖送出按鈕）
-[type: feature][layer: frontend] #104 LIFF 訂購頁：庫存 0 時顯示追加庫存預告時間
+[type: feature][layer: frontend] #103 LIFF 訂購頁：雙倒數 UI — opens_at 倒數解鎖下單按鈕；next_restock_at 倒數於時間到時自動重新拉取 sessions/active 刷新庫存
+[type: feature][layer: frontend] #104 LIFF 訂購頁：庫存 0 時依 next_restock_at 顯示「追加庫存將於 HH:MM 開放」或「已售完」
+```
+
+#### M9 — 商品個別購買上限
+
+每個商品可獨立設定 `max_per_person`（NULL = 不限），與 session 的 `per_person_limit` 並存互補：session limit 控制總件數，product limit 保護特定熱門商品的公平分配。
+
+```
+[chore][layer: db]          #105 Migration 001 更新：products 表新增 max_per_person int（NULL = 不限，有值需 > 0）
+[chore][layer: db]          #106 Migration 003 更新：create_order function 在庫存扣除前加入 per-product quota 檢查
+[chore][layer: api]         #107 更新 lib/api/response.ts：新增 PRODUCT_QUOTA_EXCEEDED 錯誤碼
+[type: feature][layer: api] #108 更新 API：POST /admin/sessions/:id/products 接收 maxPerPerson 欄位
+[type: feature][layer: api] #109 更新 API：PATCH /admin/sessions/:id/products/:id 接收 maxPerPerson 欄位
+[type: test]                #110 Integration Test：create_order 商品個別 quota 全案例
+[type: feature][layer: frontend] #111 後台：新增/編輯商品表單加入「每人限購（件）」欄位（空白 = 不限）
+[type: feature][layer: frontend] #112 LIFF 訂購頁：單品數量選擇器依 max_per_person 設定上限，超過時顯示「每人限購 N 件」提示
 ```
 
 **Board View 欄位（Kanban）：**
@@ -1521,11 +1613,12 @@ PR body 必填：
 | M6 — 人員與角色管理 | 15 | 14 hr |
 | M7 — 取貨與付款方式 | 19 | 16 hr |
 | M8 — 開搶時間與追加庫存 | 14 | 14 hr |
-| **總計** | **104** | **~106 hr** |
+| M9 — 商品個別購買上限 | 8 | 6 hr |
+| **總計** | **112** | **~112 hr** |
 
 單人每週投入約 10~12 小時，八週完成 MVP 是合理目標。
 
-M8 的核心複雜度在 `create_order` DB Function 的更新：session 時間條件驗證、restock 惰性套用，以及確保高並發下 restock 不重複套用的 `FOR UPDATE` 鎖定。建議 M8 的 Integration Test（#099、#100）在 DB Function 完成後立即撰寫，避免邊界條件被遺漏。前端的倒數 UI（#103）在 M2 時可先留空位，M8 時填入即可，不需重構。
+M8 的核心複雜度在兩個 DB Function：`apply_pending_restocks`（主動套用，回傳 `next_restock_at`）與 `create_order` 內的惰性備援（已有但需驗證雙層機制不衝突）。建議實作順序：先完成 #093（apply_pending_restocks），再更新 #095（sessions/active API），接著撰寫 #100（Integration Test），最後實作前端 #103 / #104。注意 `FOR UPDATE` 鎖定在兩個 function 內各自獨立，需驗證並發情境下 restock 只被套用一次。
 
 ---
 
