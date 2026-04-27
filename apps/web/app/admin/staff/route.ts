@@ -24,7 +24,7 @@ export async function GET (req: NextRequest) {
 
         if (error) throw new Error(error.message)
 
-        // 2. checl auth.users to get email
+        // 2. check auth.users to get email
         const userIds = (userRoles ?? []).map(r => r.user_id)
         const { data: { users }, error: authError } = 
             await supabase.auth.admin.listUsers()
@@ -45,6 +45,42 @@ export async function GET (req: NextRequest) {
         }))
 
         return Response.json({ data: staff })
+    } catch (e: any) {
+        return errorResponse(e.message)
+    }
+}
+
+export async function POST (req: NextRequest) {
+    try {
+        const ctx = await verifyAdmin(req)
+        assertPermission(ctx, 'staff:manage')
+
+        const supabase = getSupabaseAdmin()
+        const { displayName, email, roleId } = await req.json()
+
+        if (!displayName || !email || !roleId) {
+            return errorResponse('MISSING_FIELD', 400)
+        }
+
+        // 1. send invite email and create auth user
+        const { data: inviteData, error: inviteError } = 
+            await supabase.auth.admin.inviteUserByEmail(email)
+
+        if (inviteError) return errorResponse('CREATE_USER_FAILED', 400)
+
+        // 2. create user_roles record
+        const { error: roleError } = await supabase
+            .from('user_roles')
+            .insert({
+                user_id:        inviteData.user.id,
+                role_id:        roleId,
+                display_name:   displayName,
+                is_active:      true
+            })
+
+        if (roleError) throw new Error(roleError.message)
+
+        return Response.json({ data: { userId: inviteData.user.id } }, { status: 201 })
     } catch (e: any) {
         return errorResponse(e.message)
     }
