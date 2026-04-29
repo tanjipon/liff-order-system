@@ -17,7 +17,7 @@ const LINE_USER_ID = 'U_dev_mock'  // verifyLiff.ts dev bypass
 test.beforeEach(async () => {
     await supabase.from('order_items').delete().neq('id', '00000000-0000-0000-0000-000000000000')
     await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    await supabase.from('products').update({ stock_qty: 20 }).eq('id', PRODUCT_ID)
+    await supabase.from('products').update({ stock_qty: 20, max_per_person: null }).eq('id', PRODUCT_ID)
 })
 
 test('anti scalper: limit reached', async ({ page }) => {

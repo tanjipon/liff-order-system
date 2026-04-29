@@ -4,6 +4,7 @@ export function errorResponse(code: string, status = 400) {
         FORBIDDEN: '無操作權限',
         ACCOUNT_DISABLED: '此帳號已停用，請聯絡管理員',
         QUOTA_EXCEEDED: '已超過本次開單每人購買上限',
+        PRODUCT_QUOTA_EXCEEDED: '已超過此商品每人購買上限',
         INSUFFICIENT_STOCK: '商品庫存不足',
         SESSION_NOT_ACTIVE: '目前沒有開放中的開單',
         ORDER_NOT_FOUND: '找不到此訂單',

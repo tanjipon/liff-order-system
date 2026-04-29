@@ -20,7 +20,7 @@ const PICKUP_OPTION_ID = 'cccccccc-0000-0000-0000-000000000001'
 beforeEach(async () => {
     await resetData()
     // Reset stock
-    await supabase.from('products').update({ stock_qty: 20 }).eq('id', PRODUCT_ID)
+    await supabase.from('products').update({ stock_qty: 20, max_per_person: null }).eq('id', PRODUCT_ID)
 })
 
 describe('create_order DB Function', () => {

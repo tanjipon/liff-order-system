@@ -12,7 +12,7 @@ const PRODUCT_ID = 'bbbbbbbb-0000-0000-0000-000000000001'
 async function resetData() {
     await supabase.from('restock_items').delete().neq('restock_id', '00000000-0000-0000-0000-000000000000')
     await supabase.from('session_restocks').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    await supabase.from('products').update({ stock_qty: 20 }).eq('id', PRODUCT_ID)
+    await supabase.from('products').update({ stock_qty: 20, max_per_person: null }).eq('id', PRODUCT_ID)
 }
 
 // restock record creating helper

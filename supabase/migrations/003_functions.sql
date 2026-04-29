@@ -103,7 +103,7 @@ begin
         end if;
     end if;
 
-    -- 5. Lazy restock(apply restock when clients create order) 
+    -- 5.1 Lazy restock(apply restock when clients create order) 
     for v_restock in
         select sr.id
         from session_restocks sr
@@ -125,6 +125,34 @@ begin
         update session_restocks
         set applied = true
         where id = v_restock.id;
+    end loop;
+
+    -- 5.2 per-product quota check
+    for v_item in select * from jsonb_array_elements(p_items)
+    loop
+        select * into v_product
+        from products
+        where id = (v_item->>'product_id')::uuid
+          and session_id = p_session_id;
+
+        if not found then
+            raise exception 'PRODUCT_NOT_FOUND';
+        end if;
+
+        -- NULL means unlimited skip validation
+        if v_product.max_per_person is not null then
+            select coalesce(sum(oi.quantity), 0) into v_quota_used
+            from orders o
+            join order_items oi on oi.order_id = o.id
+            where o.session_id = p_session_id
+              and o.line_user_id = p_line_user_id
+              and o.status != 'cancelled'
+              and oi.product_id = v_product.id;
+
+            if (v_quota_used + (v_item->>'quantity')::int) > v_product.max_per_person then
+                raise exception 'PRODUCT_QUOTA_EXCEEDED:%', v_product.name;
+            end if;
+        end if;
     end loop;
 
     -- 6. Create（include pickup_fee）
