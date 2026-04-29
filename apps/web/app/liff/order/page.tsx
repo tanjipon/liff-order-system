@@ -12,7 +12,10 @@ type Product = {
 type Session = {
     id: string
     title: string
+    opens_at: string | null
+    closes_at: string | null
     per_person_limit: number | null
+    next_restock_at: string | null
     products: Product[]
 }
 
@@ -37,6 +40,28 @@ export default function OrderPage() {
     const [pickupOptions, setPickupOptions] = useState<PickupOption[]>([])
     const [selectedPickup, setSelectedPickup] = useState<PickupOption | null>(null)
     const [selectedPayment, setSelectedPayment] = useState<'bank_transfer' | 'cash' | null>(null)
+
+    const [now, setNow] = useState(() => Date.now())
+
+    // update now every second to drive counting down UI
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 1000)
+        return () => clearInterval(timer)
+    }, [])
+
+    // refresh when next_restock_at count to 0
+    useEffect(() => {
+        if (!session?.next_restock_at) return
+        const msLeft = new Date(session.next_restock_at).getTime() - now
+        if (msLeft <= 0) {
+            // time's up and update stock
+            fetch('/api/sessions/active')
+                .then(res => res.json())
+                .then(body => {
+                    if (body.data) setSession(body.data)
+                })
+        }
+    }, [now, session?.next_restock_at])
 
     useEffect(() => {
         fetch('/api/sessions/active')
@@ -76,6 +101,15 @@ export default function OrderPage() {
         }
     }, [step])
 
+    function formatCountdown(targetIso: string): string {
+        const msLeft = new Date(targetIso).getTime() - now
+        if (msLeft <= 0) return '00:00'
+        const totalSec = Math.floor(msLeft / 1000)
+        const min = Math.floor(totalSec / 60).toString().padStart(2, '0')
+        const sec = (totalSec % 60).toString().padStart(2, '0')
+        return `${min}:${sec}`
+    }
+
     function updateQuantity(productId: string, delta: number, maxStock: number) {
         setQuantities(prev => {
             const current = prev[productId] ?? 0
@@ -91,7 +125,7 @@ export default function OrderPage() {
     ) ?? 0
 
     if (loading) return <div className="p-4">載入中</div>
-    if (error)   return <div className="p-4 text-red-500">{error}</div>
+    if (error) return <div className="p-4 text-red-500">{error}</div>
 
     if (orderId) return (
         <div className="p-4 max-w-md mx-auto text-center">
@@ -119,7 +153,7 @@ export default function OrderPage() {
                         .filter(p => (quantities[p.id] ?? 0) > 0)
                         .map(p => ({ product_id: p.id, quantity: quantities[p.id] })),
                     pickupOptionId: selectedPickup!.id,
-                    paymentMethod:  selectedPayment!,
+                    paymentMethod: selectedPayment!,
                 })
             })
             const body = await res.json()
@@ -137,12 +171,16 @@ export default function OrderPage() {
         <div className="p-4 max-w-md mx-auto">
             <h1 className="text-xl font-bold mb-4">{session.title}</h1>
             {session.per_person_limit && (
-                <div className={`text-sm mb-4 p-2 rounded ${
-                    totalSelected >= session.per_person_limit
-                        ? 'bg-red-50 text-red-600'
-                        : 'bg-gray-50 text-gray-500'
-                }`}>
+                <div className={`text-sm mb-4 p-2 rounded ${totalSelected >= session.per_person_limit
+                    ? 'bg-red-50 text-red-600'
+                    : 'bg-gray-50 text-gray-500'
+                    }`}>
                     每人限購 {session.per_person_limit} 件・已選 {totalSelected} 件
+                </div>
+            )}
+            {session.opens_at && new Date(session.opens_at).getTime() > now && (
+                <div className="text-sm mb-4 p-2 rounded bg-yellow-50 text-yellow-700">
+                    開搶倒數：{formatCountdown(session.opens_at)}
                 </div>
             )}
             <div className="space-y-4">
@@ -172,7 +210,10 @@ export default function OrderPage() {
             </div>
             <button
                 onClick={() => setStep('pickup')}
-                disabled={totalItems === 0}
+                disabled={
+                    totalItems === 0 ||
+                    (session.opens_at !== null && new Date(session.opens_at).getTime() > now)
+                }
                 className="mt-4 w-full py-3 bg-green-500 text-white rounded-lg font-bold disabled:opacity-40"
             >
                 下一步：選擇取貨方式
@@ -190,11 +231,10 @@ export default function OrderPage() {
                     <button
                         key={option.id}
                         onClick={() => setSelectedPickup(option)}
-                        className={`w-full text-left border rounded-lg p-4 ${
-                            selectedPickup?.id === option.id
-                                ? 'border-green-500 bg-green-50'
-                                : 'border-gray-200'
-                        }`}
+                        className={`w-full text-left border rounded-lg p-4 ${selectedPickup?.id === option.id
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-gray-200'
+                            }`}
                     >
                         <div className="flex justify-between items-center">
                             <p className="font-medium">{option.name}</p>
@@ -224,7 +264,7 @@ export default function OrderPage() {
         const availablePayments: { value: 'bank_transfer' | 'cash'; label: string }[] = (
             [
                 { value: 'bank_transfer', label: '銀行匯款' },
-                { value: 'cash',          label: '現金付款' },
+                { value: 'cash', label: '現金付款' },
             ] as const
         ).filter(p =>
             !selectedPickup?.allowed_payment_methods ||
@@ -240,11 +280,10 @@ export default function OrderPage() {
                         <button
                             key={p.value}
                             onClick={() => setSelectedPayment(p.value)}
-                            className={`w-full text-left border rounded-lg p-4 font-medium ${
-                                selectedPayment === p.value
-                                    ? 'border-green-500 bg-green-50'
-                                    : 'border-gray-200'
-                            }`}
+                            className={`w-full text-left border rounded-lg p-4 font-medium ${selectedPayment === p.value
+                                ? 'border-green-500 bg-green-50'
+                                : 'border-gray-200'
+                                }`}
                         >
                             {p.label}
                         </button>
