@@ -13,7 +13,7 @@ export async function POST(
         assertPermission(ctx, 'sessions:edit')
         const supabase = getSupabaseAdmin()
 
-        const { name, price, stockQty } = await req.json()
+        const { name, price, stockQty, maxPerPerson } = await req.json()
 
         if (!name || price == null || stockQty == null) {
             return errorResponse('MISSING_FIELDS', 400)
@@ -26,6 +26,7 @@ export async function POST(
                 name,
                 price,
                 stock_qty: stockQty,
+                max_per_person: maxPerPerson ?? null,
             })
             .select('id')
             .single()
