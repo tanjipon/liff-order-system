@@ -33,7 +33,7 @@ async function resetData() {
 
 beforeEach(async () => {
     await resetData()
-    await supabase.from('products').update({ stock_qty: 20 }).eq('id', PRODUCT_ID)
+    await supabase.from('products').update({ stock_qty: 20, max_per_person: null }).eq('id', PRODUCT_ID)
 })
 
 // 直接構造 NextRequest 呼叫 route handler，不需要 dev server

@@ -19,7 +19,7 @@ async function resetOrders() {
 beforeEach(async () => {
     await supabase.from('order_items').delete().neq('id', '00000000-0000-0000-0000-000000000000')
     await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    await supabase.from('products').update({ stock_qty: 20 }).eq('id', PRODUCT_ID)
+    await supabase.from('products').update({ stock_qty: 20, max_per_person: null }).eq('id', PRODUCT_ID)
     await supabase.from('sessions').update({
         opens_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
         closes_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),

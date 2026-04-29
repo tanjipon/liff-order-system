@@ -30,7 +30,7 @@ async function createTestOrder(lineUserId: string, quantity: number) {
 
 beforeEach(async () => {
     await resetData()
-    await supabase.from('products').update({ stock_qty: 20 }).eq('id', PRODUCT_ID)
+    await supabase.from('products').update({ stock_qty: 20, max_per_person: null }).eq('id', PRODUCT_ID)
 })
 
 describe('admin_cancel_order DB Function', () => {

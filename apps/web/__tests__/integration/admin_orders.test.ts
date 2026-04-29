@@ -68,7 +68,7 @@ function makeRequest(orderId: string, body?: object) {
 
 beforeEach(async () => {
     await resetData()
-    await supabase.from('products').update({ stock_qty: 20 }).eq('id', PRODUCT_ID)
+    await supabase.from('products').update({ stock_qty: 20, max_per_person: null }).eq('id', PRODUCT_ID)
 })
 
 describe('PATCH /admin/orders/:id/accept', () => {
