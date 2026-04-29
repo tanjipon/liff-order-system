@@ -17,12 +17,15 @@ async function resetOrders() {
 
 // reset order before each test and reset session time to active
 beforeEach(async () => {
-    await resetOrders()
+    await supabase.from('order_items').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('products').update({ stock_qty: 20 }).eq('id', PRODUCT_ID)
     await supabase.from('sessions').update({
-        opens_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 小時前
-        closes_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 天後
+        opens_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        closes_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     }).eq('id', SESSION_ID)
 })
+
 
 describe('create_order 時間條件驗證', () => {
     it('opens_at not reached: return SESSION_NOT_ACTIVE', async () => {
