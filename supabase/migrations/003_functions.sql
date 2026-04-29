@@ -1,3 +1,46 @@
+-- apply_pending_restocks: 主動套用到期的 restock，回傳下一波 next_restock_at
+create or replace function apply_pending_restocks(
+    p_session_id uuid
+) returns timestamptz language plpgsql as $$
+declare
+    v_restock   record;
+    v_next_at   timestamptz;
+begin
+    -- 1. locl and apply all active restock
+    for v_restock in
+        select sr.id
+        from session_restocks sr
+        where sr.session_id = p_session_id
+          and sr.is_active = true
+          and sr.applied = false
+          and sr.opens_at <= now()
+        order by sr.opens_at
+        for update of sr skip locked
+    loop
+        update products p
+        set stock_qty = p.stock_qty + ri.quantity
+        from restock_items ri
+        where ri.restock_id = v_restock.id
+          and ri.product_id = p.id;
+
+        update session_restocks
+        set applied = true
+        where id = v_restock.id;
+    end loop;
+
+    -- 2. query next inactive restock time
+    select min(opens_at) into v_next_at
+    from session_restocks
+    where session_id = p_session_id
+      and is_active = true
+      and applied = false
+      and opens_at > now();
+
+    return v_next_at;
+end;
+$$;
+
+
 create or replace function create_order(
     p_session_id        uuid,
     p_line_user_id      text,

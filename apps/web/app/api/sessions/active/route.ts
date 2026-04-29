@@ -8,17 +8,17 @@ export async function GET(req: NextRequest) {
     const { data: session, error } = await supabase
         .from('sessions')
         .select(`
-            id, 
+            id,
             title,
             opens_at,
             closes_at,
             per_person_limit,
             products (
-                id, 
+                id,
                 name,
                 price,
                 stock_qty
-            )    
+            )
         `)
         .eq('is_active', true)
         .or(`opens_at.is.null,opens_at.lte.${now}`)
@@ -31,5 +31,21 @@ export async function GET(req: NextRequest) {
         return Response.json({ error: 'SESSION_NOT_ACTIVE' }, { status: 404 })
     }
 
-    return Response.json({ data: session })
+    // actively apply active restock and get next restock
+    const { data: nextRestockAt } = await supabase
+        .rpc('apply_pending_restocks', { p_session_id: session.id })
+
+    // re-query products to get new stock_qty
+    const { data: products } = await supabase
+        .from('products')
+        .select('id, name, price, stock_qty')
+        .eq('session_id', session.id)
+
+    return Response.json({
+        data: {
+            ...session,
+            products: products ?? session.products,
+            next_restock_at: nextRestockAt ?? null,
+        }
+    })
 }
