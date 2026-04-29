@@ -16,7 +16,7 @@ export async function GET(
             .from('sessions')
             .select(`
                 id, title, opens_at, closes_at, per_person_limit, is_active, created_at,
-                products ( id, name, price, stock_qty )
+                products ( id, name, price, stock_qty, max_per_person )
             `)
             .eq('id', id)
             .single()

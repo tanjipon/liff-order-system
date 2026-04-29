@@ -5,12 +5,12 @@ import { useParams } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import Link from 'next/link'
 
-
 type Product = {
     id: string
     name: string
     price: number
     stock_qty: number
+    max_per_person: number | null
 }
 
 type RestockItem = {
@@ -47,6 +47,7 @@ export default function SessionDetailPage() {
     const [name, setName] = useState('')
     const [price, setPrice] = useState('')
     const [stockQty, setStockQty] = useState('')
+    const [maxPerPerson, setMaxPerPerson] = useState('')
     const [adding, setAdding] = useState(false)
     const [addError, setAddError] = useState<string | null>(null)
 
@@ -55,6 +56,7 @@ export default function SessionDetailPage() {
         name: string
         price: string
         stockQty: string
+        maxPerPerson: string
     } | null>(null)
 
     const [restocks, setRestocks] = useState<Restock[]>([])
@@ -80,10 +82,7 @@ export default function SessionDetailPage() {
         try {
             const res = await adminFetch(`/api/admin/sessions/${id}/restocks`)
             const body = await res.json()
-            if (body.data) {
-                setRestocks(body.data)
-                // initialize restockItems
-            }
+            if (body.data) setRestocks(body.data)
         } catch { }
     }
 
@@ -104,6 +103,7 @@ export default function SessionDetailPage() {
                     name,
                     price: Number(price),
                     stockQty: Number(stockQty),
+                    maxPerPerson: maxPerPerson ? Number(maxPerPerson) : null,
                 }),
             })
             const body = await res.json()
@@ -112,6 +112,7 @@ export default function SessionDetailPage() {
             setName('')
             setPrice('')
             setStockQty('')
+            setMaxPerPerson('')
             loadSession()
         } catch (e: any) {
             setAddError(e.message)
@@ -175,6 +176,7 @@ export default function SessionDetailPage() {
                     name: editState.name,
                     price: Number(editState.price),
                     stockQty: Number(editState.stockQty),
+                    maxPerPerson: editState.maxPerPerson ? Number(editState.maxPerPerson) : null,
                 }),
             }
         )
@@ -244,6 +246,13 @@ export default function SessionDetailPage() {
                                             className="border rounded px-2 py-1 text-sm w-24"
                                             required
                                         />
+                                        <input
+                                            type="number" min="1"
+                                            placeholder="不限"
+                                            value={editState.maxPerPerson}
+                                            onChange={e => setEditState({ ...editState, maxPerPerson: e.target.value })}
+                                            className="border rounded px-2 py-1 text-sm w-24"
+                                        />
                                         <button type="submit" className="px-3 py-1 bg-blue-500 text-white rounded text-sm">儲存</button>
                                         <button type="button" onClick={() => setEditState(null)} className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm">取消</button>
                                     </form>
@@ -251,11 +260,20 @@ export default function SessionDetailPage() {
                                     <div className="flex justify-between items-center">
                                         <div>
                                             <p className="font-medium">{p.name}</p>
-                                            <p className="text-sm text-gray-500">NT$ {p.price}・庫存 {p.stock_qty}</p>
+                                            <p className="text-sm text-gray-500">
+                                                NT$ {p.price}・庫存 {p.stock_qty}
+                                                {p.max_per_person && `・每人限購 ${p.max_per_person} 件`}
+                                            </p>
                                         </div>
                                         <div className="flex gap-2">
                                             <button
-                                                onClick={() => setEditState({ productId: p.id, name: p.name, price: String(p.price), stockQty: String(p.stock_qty) })}
+                                                onClick={() => setEditState({
+                                                    productId: p.id,
+                                                    name: p.name,
+                                                    price: String(p.price),
+                                                    stockQty: String(p.stock_qty),
+                                                    maxPerPerson: p.max_per_person ? String(p.max_per_person) : ''
+                                                })}
                                                 className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm"
                                             >編輯</button>
                                             <button
@@ -308,6 +326,17 @@ export default function SessionDetailPage() {
                                 onChange={e => setStockQty(e.target.value)}
                                 required
                                 className="w-full border rounded px-3 py-2 text-sm"
+                            />
+                        </div>
+                        <div className="flex-1">
+                            <label className="block text-sm font-medium mb-1">每人限購（件）</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={maxPerPerson}
+                                onChange={e => setMaxPerPerson(e.target.value)}
+                                className="w-full border rounded px-3 py-2 text-sm"
+                                placeholder="不填表示無限制"
                             />
                         </div>
                     </div>
