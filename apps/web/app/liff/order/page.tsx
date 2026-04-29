@@ -7,6 +7,7 @@ type Product = {
     name: string
     price: number
     stock_qty: number
+    max_per_person: number | null
 }
 
 type Session = {
@@ -119,10 +120,13 @@ export default function OrderPage() {
         return parts.join(' ')
     }
 
-    function updateQuantity(productId: string, delta: number, maxStock: number) {
+    function updateQuantity(productId: string, delta: number, maxStock: number, maxPerPerson: number | null) {
         setQuantities(prev => {
             const current = prev[productId] ?? 0
-            const next = Math.max(0, Math.min(current + delta, maxStock))
+            const effectiveMax = maxPerPerson !== null
+                ? Math.min(maxStock, maxPerPerson - quotaUsed)
+                : maxStock
+            const next = Math.max(0, Math.min(current + delta, Math.max(0, effectiveMax)))
             return { ...prev, [productId]: next }
         })
     }
@@ -216,16 +220,26 @@ export default function OrderPage() {
                                 </p>
                             )}
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => updateQuantity(product.id, -1, product.stock_qty)}
-                                className="w-8 h-8 rounded-full border text-lg">-</button>
-                            <span className="w-6 text-center">{quantities[product.id] ?? 0}</span>
-                            <button onClick={() => updateQuantity(product.id, 1, product.stock_qty)}
-                                disabled={
-                                    (quantities[product.id] ?? 0) >= product.stock_qty ||
-                                    (session.per_person_limit !== null && totalSelected >= session.per_person_limit)
-                                }
-                                className="w-8 h-8 rounded-full border text-lg disabled:opacity-40">+</button>
+                        <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => updateQuantity(product.id, -1, product.stock_qty, product.max_per_person)}
+                                    className="w-8 h-8 rounded-full border text-lg">-</button>
+                                <span className="w-6 text-center">{quantities[product.id] ?? 0}</span>
+                                <button
+                                    onClick={() => updateQuantity(product.id, 1, product.stock_qty, product.max_per_person)}
+                                    disabled={
+                                        (quantities[product.id] ?? 0) >= product.stock_qty ||
+                                        (session.per_person_limit !== null && totalSelected >= session.per_person_limit) ||
+                                        (product.max_per_person !== null && (quantities[product.id] ?? 0) >= product.max_per_person - quotaUsed)
+                                    }
+                                    className="w-8 h-8 rounded-full border text-lg disabled:opacity-40">+</button>
+                            </div>
+                            {product.max_per_person !== null && (
+                                <p className="text-xs text-gray-400">
+                                    每人限購 {product.max_per_person} 件
+                                </p>
+                            )}
                         </div>
                     </div>
                 ))}
