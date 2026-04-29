@@ -14,12 +14,13 @@ create table sessions (
 
 -- Create products table
 create table products (
-    id          uuid primary key default uuid_generate_v4(),
-    session_id  uuid not null references sessions(id) on delete cascade,
-    name        text not null,
-    price       int not null check (price >= 0),
-    stock_qty   int not null check (stock_qty >= 0),
-    created_at  timestamptz not null default now()
+    id              uuid primary key default uuid_generate_v4(),
+    session_id      uuid not null references sessions(id) on delete cascade,
+    name            text not null,
+    price           int not null check (price >= 0),
+    stock_qty       int not null check (stock_qty >= 0),
+    max_per_person  int check (max_per_person > 0),
+    created_at      timestamptz not null default now()
 );
 
 -- Create pickup_options table
