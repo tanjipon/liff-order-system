@@ -103,11 +103,20 @@ export default function OrderPage() {
 
     function formatCountdown(targetIso: string): string {
         const msLeft = new Date(targetIso).getTime() - now
-        if (msLeft <= 0) return '00:00'
+        if (msLeft <= 0) return '0秒'
         const totalSec = Math.floor(msLeft / 1000)
-        const min = Math.floor(totalSec / 60).toString().padStart(2, '0')
-        const sec = (totalSec % 60).toString().padStart(2, '0')
-        return `${min}:${sec}`
+        const days = Math.floor(totalSec / 86400)
+        const hours = Math.floor((totalSec % 86400) / 3600)
+        const minutes = Math.floor((totalSec % 3600) / 60)
+        const secs = totalSec % 60
+
+        const parts = []
+        if (days > 0) parts.push(`${days}日`)
+        if (hours > 0) parts.push(`${hours}時`)
+        if (minutes > 0) parts.push(`${minutes}分`)
+        parts.push(`${secs}秒`)
+
+        return parts.join(' ')
     }
 
     function updateQuantity(productId: string, delta: number, maxStock: number) {
@@ -190,6 +199,22 @@ export default function OrderPage() {
                             <p className="font-medium">{product.name}</p>
                             <p className="text-sm text-gray-500">NT$ {product.price}</p>
                             <p className="text-xs text-gray-400">庫存 {product.stock_qty}</p>
+                            {product.stock_qty === 0 && (
+                                <p className="text-xs mt-0.5">
+                                    {session.next_restock_at
+                                        ? <span className="text-yellow-600">
+                                            追加庫存將於 {new Date(session.next_restock_at).toLocaleString('zh-TW', {
+                                                month: 'numeric',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })} 開放<br />
+                                            （{formatCountdown(session.next_restock_at)}）
+                                        </span>
+                                        : <span className="text-gray-400">已售完</span>
+                                    }
+                                </p>
+                            )}
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={() => updateQuantity(product.id, -1, product.stock_qty)}
