@@ -14,6 +14,8 @@
 
 **v1.5 異動說明：** 新增 Session 預設開搶時間與追加庫存排程功能。Session 開放判斷改為時間條件驅動（`opens_at / closes_at`）；新增 `session_restocks` 與 `restock_items` 表；`create_order` DB Function 於庫存扣除前惰性套用到期 restock；RBAC seed 新增 `restocks:manage` 權限；新增 M8 Milestone。
 
+**v1.8 異動說明：** 新增 M10 UI 美化 Milestone。採純 Tailwind CSS 手刻（不引入 shadcn/ui），以 CSS custom properties 建立 LIFF 粉嫩系與 Admin Gmail 系雙色彩 token；新增 `useMinLoading` hook（最少 1.5 秒載入，避免畫面閃爍）；LIFF 載入動畫改為 GIF 動圖；後台載入改為 Spinner；LIFF 頁面採手機優先設計；後台 Dashboard 支援桌機與手機響應式佈局；所有數字顯示元件採固定寬度，避免版面位移。
+
 **v1.7 異動說明：** 新增商品個別購買上限功能。`products` 表新增 `max_per_person int`（NULL = 不限）；`create_order` DB Function 在庫存扣除前加入 per-product quota 檢查；新增錯誤碼 `PRODUCT_QUOTA_EXCEEDED`；後台新增/編輯商品表單新增欄位；LIFF 選購頁依 `max_per_person` 限制單品數量選擇器；新增 M9 Milestone。
 
 **v1.6 異動說明：** 調整 restock 套用機制。改為**主動觸發 + 惰性備援**雙層架構：新增 `apply_pending_restocks(session_id)` DB Function，由 `GET /api/sessions/active` 在回傳前主動呼叫，確保客戶進入頁面時即看到最新庫存；Function 同時回傳下一波 restock 的 `next_restock_at`，讓前端在庫存歸零時顯示倒數計時器，時間到自動重新拉取庫存。`create_order` 內的惰性套用邏輯保留作為雙重保護。M8 Issue 清單依此機制調整。
@@ -1404,6 +1406,7 @@ jobs:
 | M7 — 取貨與付款方式 | pickup_options 管理、現金付款流程、LIFF 選購步驟 | 第 7 週 |
 | M8 — 開搶時間與追加庫存 | Session 時間條件開放、restock 排程、倒數 UI、追加庫存預告 | 第 8 週 |
 | M9 — 商品個別購買上限 | products.max_per_person、create_order 商品 quota 檢查、後台欄位、LIFF 選購限制 | 第 9 週 |
+| M10 — UI 美化 | 色彩系統、載入動畫、LIFF 手機優先、後台響應式、數字固定寬度 | 第 10 週 |
 
 ### 8.3 Issues 清單
 
@@ -1570,6 +1573,46 @@ restock 套用採**主動觸發 + 惰性備援**雙層架構：
 [type: feature][layer: frontend] #112 LIFF 訂購頁：單品數量選擇器依 max_per_person 設定上限，超過時顯示「每人限購 N 件」提示
 ```
 
+#### M10 — UI 美化
+
+LIFF 採**溫暖粉嫩系**（米白底、玫瑰粉主色），後台採 **Gmail 系**（白底、藍主色、灰 sidebar）。兩套色彩以 CSS custom properties（`@theme`）定義於 `globals.css`，所有元件 inline style 引用 token，確保日後改色只需改一處。
+
+**設計規範：**
+- **LIFF**：手機優先（`max-w-md` 置中，適配任何手機動態島尺寸）；數字元件（購買數量選擇器）使用固定寬度容器（`w-8 text-center`），不因數字位數影響版面
+- **後台**：Sidebar + 主內容雙欄佈局；手機時 sidebar 收合為頂部導覽列
+- **載入動畫**：LIFF 使用 GIF 動圖（`/public/loading-dog.gif`，規格：160×160px、透明背景、無限循環）；後台使用 SVG spinner（`animate-spin`）
+- **最少載入時間**：`useMinLoading(1500)` hook，讓 `Promise.all([fetch, sleep(1500)])` 並行，取最慢者，避免資料瞬間回來時畫面閃爍
+
+**實作架構：**
+```
+apps/web/
+├── hooks/
+│   └── useMinLoading.ts          ← 最少載入時間 hook
+├── components/
+│   ├── liff/
+│   │   └── LiffLoader.tsx        ← GIF 載入元件
+│   └── admin/
+│       └── AdminSpinner.tsx      ← Spinner 元件
+├── app/
+│   ├── globals.css               ← 色彩 token（@theme）
+│   └── admin/
+│       └── layout.tsx            ← Gmail sidebar layout
+└── public/
+    └── loading-dog.gif           ← GIF 動圖（160×160px 透明背景）
+```
+
+```
+[type: feature][layer: frontend] #113 globals.css：建立 LIFF 粉嫩系 + Admin Gmail 系色彩 token（CSS custom properties）
+[type: feature][layer: frontend] #114 建立 hooks/useMinLoading.ts（最少 1.5 秒載入，combine(dataLoaded) 回傳 isLoading）
+[type: feature][layer: frontend] #115 建立 components/liff/LiffLoader.tsx（GIF 動圖，規格：160×160px 透明 GIF，放 public/loading-dog.gif）
+[type: feature][layer: frontend] #116 建立 components/admin/AdminSpinner.tsx（SVG animate-spin，支援 fullPage / inline 模式）
+[type: feature][layer: frontend] #117 建立 app/admin/layout.tsx（Gmail 風格 sidebar；手機版改為頂部導覽列）
+[type: feature][layer: frontend] #118 美化 LIFF /liff/order 頁面（粉嫩系配色、手機優先、數字固定寬度、LiffLoader + useMinLoading）
+[type: feature][layer: frontend] #119 美化 LIFF /liff/status 頁面（粉嫩系配色、手機優先、LiffLoader + useMinLoading）
+[type: feature][layer: frontend] #120 美化後台 Dashboard /admin（Gmail 配色、響應式、AdminSpinner + useMinLoading）
+[type: feature][layer: frontend] #121 美化後台其他頁面（sessions、orders、staff、roles、pickup-options）
+```
+
 **Board View 欄位（Kanban）：**
 
 ```
@@ -1614,7 +1657,8 @@ PR body 必填：
 | M7 — 取貨與付款方式 | 19 | 16 hr |
 | M8 — 開搶時間與追加庫存 | 14 | 14 hr |
 | M9 — 商品個別購買上限 | 8 | 6 hr |
-| **總計** | **112** | **~112 hr** |
+| M10 — UI 美化 | 9 | 12 hr |
+| **總計** | **121** | **~124 hr** |
 
 單人每週投入約 10~12 小時，八週完成 MVP 是合理目標。
 

@@ -10,6 +10,8 @@
 
 **v1.3 異動說明：** 新增 Session 預設開搶時間與追加庫存排程功能。`sessions` 表的 `opens_at` / `closes_at` 正式驅動開放判斷邏輯，不再依賴純手動的 `is_active`；新增 `session_restocks` 與 `restock_items` 兩張表；`create_order` DB Function 於下單前惰性套用到期的 restock；後台新增追加庫存排程 UI；LIFF 客戶端顯示倒數與追加庫存預告；新增 `restocks:manage` 權限項目；開發排程更新至八週。
 
+**v1.6 異動說明：** 新增 M10 UI 美化規格。明確定義 LIFF 手機優先設計規範、後台響應式佈局、色彩系統、載入體驗、數字顯示穩定性等 UX 要求；新增第十週開發排程。
+
 **v1.5 異動說明：** 新增商品個別購買上限。`products` 表新增 `max_per_person`（NULL = 不限）；與 `sessions.per_person_limit` 並存，各自獨立控制；`create_order` 加入 per-product quota 檢查；新增錯誤碼 `PRODUCT_QUOTA_EXCEEDED`；後台商品表單與 LIFF 選購頁同步更新；新增 M9 Milestone。
 
 **v1.4 異動說明：** 調整 restock 套用機制為**主動觸發 + 惰性備援**雙層架構。客戶進入 session 頁面時，系統主動呼叫 `apply_pending_restocks()` 套用到期 restock，確保頁面載入即看到最新庫存；API 回傳 `next_restock_at`，前端在庫存歸零時顯示倒數計時器，時間到自動刷新庫存。`create_order` 內保留惰性套用作為雙重保護。
@@ -554,3 +556,73 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | 第七週 | 後台取貨方式管理（新增、編輯、上下架、排序） | 老闆自主管理取貨選項 |
 | 第八週 | 後台追加庫存排程管理（新增、查看、取消）、LIFF 追加庫存提示 | 老闆可排程追加庫存 |
 | 第九週 | products.max_per_person 欄位、create_order 商品 quota 檢查、後台表單與 LIFF 選購頁限制 | 熱門商品公平分配 |
+| 第十週 | UI 美化（色彩系統、載入動畫、LIFF 手機優先、後台響應式、數字固定寬度） | 整體 UX 提升 |
+
+---
+
+## 11. UI 設計規格（M10）
+
+### 11.1 設計原則
+
+| 面向 | LIFF（客戶端） | 後台（Admin） |
+|------|--------------|-------------|
+| 主要裝置 | 手機優先（任何手機動態島尺寸） | 桌機 + 手機雙模式 |
+| 設計風格 | 溫暖粉嫩系 | Gmail 系（清晰功能導向） |
+| 實作方式 | 純 Tailwind CSS 手刻 | 純 Tailwind CSS 手刻 |
+
+### 11.2 色彩系統
+
+以 CSS custom properties（`@theme`）定義於 `globals.css`，所有元件引用 token，改色只需改一處。
+
+**LIFF 粉嫩系 token：**
+
+| Token | 色碼 | 用途 |
+|-------|------|------|
+| `--color-liff-bg` | `#FFF8F5` | 頁面底色 |
+| `--color-liff-surface` | `#FFFFFF` | 卡片、輸入框底色 |
+| `--color-liff-border` | `#F3D0D7` | 邊框 |
+| `--color-liff-primary` | `#E8789A` | 主要按鈕、強調色 |
+| `--color-liff-primary-hover` | `#D4607F` | 按鈕 hover |
+| `--color-liff-accent` | `#F9A8C9` | 次要強調 |
+| `--color-liff-text` | `#3D1F2A` | 主要文字 |
+| `--color-liff-muted` | `#9C7080` | 次要文字、說明文字 |
+| `--color-liff-success` | `#86EFAC` | 成功狀態 |
+
+**Admin Gmail 系 token：**
+
+| Token | 色碼 | 用途 |
+|-------|------|------|
+| `--color-admin-bg` | `#F6F8FC` | 頁面底色 |
+| `--color-admin-surface` | `#FFFFFF` | 卡片、sidebar 底色 |
+| `--color-admin-border` | `#E0E0E0` | 邊框 |
+| `--color-admin-primary` | `#1A73E8` | 主要按鈕、active 狀態 |
+| `--color-admin-primary-hover` | `#1558B0` | 按鈕 hover |
+| `--color-admin-text` | `#202124` | 主要文字 |
+| `--color-admin-muted` | `#5F6368` | 次要文字 |
+| `--color-admin-sidebar-active` | `#D3E3FD` | Sidebar 選中背景 |
+
+### 11.3 LIFF UX 規範
+
+- **版面**：`max-w-md mx-auto`，適配任何手機寬度；padding `p-4`
+- **數字顯示穩定性**：購買數量選擇器的數字容器固定寬度（`w-8 text-center tabular-nums`），不因數字增減（1→10）導致 `+` / `-` 按鈕位移
+- **載入動畫**：GIF 動圖（`/public/loading-dog.gif`），居中全版顯示於粉嫩底色上
+- **最少載入時間**：1.5 秒，使用 `useMinLoading(1500)` hook，避免資料瞬間回來時畫面閃爍
+
+### 11.4 後台 UX 規範
+
+- **桌機佈局**：固定 Sidebar（寬 224px）+ 主內容區域，Sidebar 含品牌名稱與導覽項目
+- **手機佈局**：Sidebar 收合，改以頂部導覽列（橫向捲動）呈現
+- **Sidebar 導覽項目**：訂單管理 / 開單管理 / 歷史訂單 / 取貨方式 / 人員管理 / 角色權限
+- **Active 狀態**：以 `--color-admin-sidebar-active` 背景 + 圓角 pill 標示當前頁面
+- **載入動畫**：SVG spinner（`animate-spin`），支援全版頁面（`min-h-screen` 居中）與 inline 兩種模式
+
+### 11.5 GIF 動圖規格
+
+| 項目 | 規格 |
+|------|------|
+| 格式 | GIF 或 APNG |
+| 尺寸 | 160 × 160 px（顯示 80px，Retina 清晰）|
+| 背景 | 透明 |
+| 循環 | 無限循環 |
+| 幀率 | 12–24 fps |
+| 路徑 | `apps/web/public/loading-dog.gif` |
