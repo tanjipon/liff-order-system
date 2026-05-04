@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
+import AdminSpinner from '@/components/admin/AdminSpinner'
+import { useMinLoading } from '@/hooks/useMinLoading'
 import Link from 'next/link'
 
 type Product = {
@@ -37,11 +39,18 @@ type Session = {
     products: Product[]
 }
 
+const css = {
+    surface: { backgroundColor: 'var(--color-admin-surface)', borderColor: 'var(--color-admin-border)' },
+    text: { color: 'var(--color-admin-text)' },
+    muted: { color: 'var(--color-admin-muted)' },
+    border: { borderColor: 'var(--color-admin-border)' },
+} as const
+
 export default function SessionDetailPage() {
     const { id } = useParams<{ id: string }>()
 
     const [session, setSession] = useState<Session | null>(null)
-    const [loading, setLoading] = useState(true)
+    const [dataLoaded, setDataLoaded] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     const [name, setName] = useState('')
@@ -65,6 +74,9 @@ export default function SessionDetailPage() {
     const [addingRestock, setAddingRestock] = useState(false)
     const [restockError, setRestockError] = useState<string | null>(null)
 
+    const { combine } = useMinLoading(1000)
+    const isLoading = combine(dataLoaded)
+
     async function loadSession() {
         try {
             const res = await adminFetch(`/api/admin/sessions/${id}`)
@@ -74,7 +86,7 @@ export default function SessionDetailPage() {
         } catch {
             setError('載入失敗')
         } finally {
-            setLoading(false)
+            setDataLoaded(true)
         }
     }
 
@@ -95,7 +107,6 @@ export default function SessionDetailPage() {
         e.preventDefault()
         setAdding(true)
         setAddError(null)
-
         try {
             const res = await adminFetch(`/api/admin/sessions/${id}/products`, {
                 method: 'POST',
@@ -108,7 +119,6 @@ export default function SessionDetailPage() {
             })
             const body = await res.json()
             if (!res.ok) throw new Error(body.error ?? '新增失敗')
-
             setName('')
             setPrice('')
             setStockQty('')
@@ -129,16 +139,13 @@ export default function SessionDetailPage() {
             const items = restockItems
                 .filter(i => i.productId && Number(i.quantity) > 0)
                 .map(i => ({ productId: i.productId, quantity: Number(i.quantity) }))
-
             if (items.length === 0) throw new Error('請至少填寫一項商品數量')
-
             const res = await adminFetch(`/api/admin/sessions/${id}/restocks`, {
                 method: 'POST',
                 body: JSON.stringify({ opensAt: restockOpensAt, items }),
             })
             const body = await res.json()
             if (!res.ok) throw new Error(body.error ?? '新增失敗')
-
             setRestockOpensAt('')
             setRestockItems([])
             loadRestocks()
@@ -155,19 +162,15 @@ export default function SessionDetailPage() {
         loadRestocks()
     }
 
-
     async function handleDelete(productId: string) {
         if (!confirm('確定要刪除這個商品？')) return
-        await adminFetch(`/api/admin/sessions/${id}/products/${productId}`, {
-            method: 'DELETE',
-        })
+        await adminFetch(`/api/admin/sessions/${id}/products/${productId}`, { method: 'DELETE' })
         loadSession()
     }
 
     async function handleEdit(e: React.SyntheticEvent) {
         e.preventDefault()
         if (!editState) return
-
         const res = await adminFetch(
             `/api/admin/sessions/${id}/products/${editState.productId}`,
             {
@@ -186,86 +189,127 @@ export default function SessionDetailPage() {
         }
     }
 
-    if (loading) return <div className="p-6">載入中...</div>
-    if (error) return <div className="p-6 text-red-500">{error}</div>
+    if (isLoading) return <AdminSpinner />
+    if (error) return <div className="p-8 text-sm" style={{ color: '#DC2626' }}>{error}</div>
     if (!session) return null
 
     return (
-        <div className="p-6 max-w-2xl mx-auto space-y-8">
+        <div className="p-6 max-w-3xl mx-auto space-y-8">
 
-            {/* order creation info */}
-            <div>
-                <h1 className="text-2xl font-bold">{session.title}</h1>
-                <Link href={`/admin/sessions/${id}/edit`} className="text-sm text-gray-500 border rounded px-3 py-1">
-                    編輯開單
-                </Link>
-                <Link href={`/admin/sessions/${id}/stats`} className="text-sm text-gray-500 border rounded px-3 py-1">
-                    查看統計
-                </Link>
-                <div className="text-sm text-gray-500 mt-1 space-y-0.5">
-                    {session.opens_at && (
-                        <p>開放時間：{new Date(session.opens_at).toLocaleString('zh-TW')}</p>
-                    )}
-                    {session.closes_at && (
-                        <p>截止時間：{new Date(session.closes_at).toLocaleString('zh-TW')}</p>
-                    )}
-                    {session.per_person_limit && (
-                        <p>每人上限：{session.per_person_limit} 件</p>
-                    )}
+            {/* 開單資訊 */}
+            <div className="rounded-xl border p-5" style={css.surface}>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <h1 className="text-xl font-semibold" style={css.text}>{session.title}</h1>
+                        <div className="text-xs mt-1.5 space-y-0.5" style={css.muted}>
+                            {session.opens_at && (
+                                <p>開放時間：{new Date(session.opens_at).toLocaleString('zh-TW')}</p>
+                            )}
+                            {session.closes_at && (
+                                <p>截止時間：{new Date(session.closes_at).toLocaleString('zh-TW')}</p>
+                            )}
+                            {session.per_person_limit && (
+                                <p>每人上限：{session.per_person_limit} 件</p>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                        <Link href={`/admin/sessions/${id}/edit`}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                            style={css.surface}>
+                            <span style={css.muted}>編輯開單</span>
+                        </Link>
+                        <Link href={`/admin/sessions/${id}/stats`}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                            style={css.surface}>
+                            <span style={css.muted}>查看統計</span>
+                        </Link>
+                    </div>
                 </div>
             </div>
 
-            {/* products list */}
+            {/* 商品列表 */}
             <div>
-                <h2 className="text-lg font-semibold mb-3">商品</h2>
+                <h2 className="text-base font-semibold mb-3" style={css.text}>商品</h2>
                 {session.products.length === 0 ? (
-                    <p className="text-gray-400 text-sm">尚未新增商品</p>
+                    <div className="rounded-xl border p-8 text-center" style={css.surface}>
+                        <p className="text-sm" style={css.muted}>尚未新增商品</p>
+                    </div>
                 ) : (
-                    <div className="space-y-2">
-                        {session.products.map(p => (
-                            <div key={p.id} className="border rounded px-4 py-3 space-y-2">
+                    <div className="rounded-xl border overflow-hidden" style={css.surface}>
+                        {session.products.map((p, idx) => (
+                            <div key={p.id}
+                                className={`p-4 ${idx !== 0 ? 'border-t' : ''}`}
+                                style={idx !== 0 ? css.border : {}}>
                                 {editState?.productId === p.id ? (
                                     <form onSubmit={handleEdit} className="flex gap-2 items-end flex-wrap">
-                                        <input
-                                            value={editState.name}
-                                            onChange={e => setEditState({ ...editState, name: e.target.value })}
-                                            className="border rounded px-2 py-1 text-sm flex-1"
-                                            required
-                                        />
-                                        <input
-                                            type="number" min="0"
-                                            value={editState.price}
-                                            onChange={e => setEditState({ ...editState, price: e.target.value })}
-                                            className="border rounded px-2 py-1 text-sm w-24"
-                                            required
-                                        />
-                                        <input
-                                            type="number" min="0"
-                                            value={editState.stockQty}
-                                            onChange={e => setEditState({ ...editState, stockQty: e.target.value })}
-                                            className="border rounded px-2 py-1 text-sm w-24"
-                                            required
-                                        />
-                                        <input
-                                            type="number" min="1"
-                                            placeholder="不限"
-                                            value={editState.maxPerPerson}
-                                            onChange={e => setEditState({ ...editState, maxPerPerson: e.target.value })}
-                                            className="border rounded px-2 py-1 text-sm w-24"
-                                        />
-                                        <button type="submit" className="px-3 py-1 bg-blue-500 text-white rounded text-sm">儲存</button>
-                                        <button type="button" onClick={() => setEditState(null)} className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm">取消</button>
+                                        <div className="flex flex-col gap-1 flex-1 min-w-32">
+                                            <label className="text-xs font-medium" style={css.muted}>商品名稱</label>
+                                            <input
+                                                value={editState.name}
+                                                onChange={e => setEditState({ ...editState, name: e.target.value })}
+                                                className="border rounded-lg px-3 py-1.5 text-sm"
+                                                style={css.surface}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-1 w-24">
+                                            <label className="text-xs font-medium" style={css.muted}>售價（NT$）</label>
+                                            <input
+                                                type="number" min="0"
+                                                value={editState.price}
+                                                onChange={e => setEditState({ ...editState, price: e.target.value })}
+                                                className="border rounded-lg px-3 py-1.5 text-sm w-full"
+                                                style={css.surface}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-1 w-24">
+                                            <label className="text-xs font-medium" style={css.muted}>庫存數量</label>
+                                            <input
+                                                type="number" min="0"
+                                                value={editState.stockQty}
+                                                onChange={e => setEditState({ ...editState, stockQty: e.target.value })}
+                                                className="border rounded-lg px-3 py-1.5 text-sm w-full"
+                                                style={css.surface}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-1 w-24">
+                                            <label className="text-xs font-medium" style={css.muted}>每人限購</label>
+                                            <input
+                                                type="number" min="1"
+                                                placeholder="不限"
+                                                value={editState.maxPerPerson}
+                                                onChange={e => setEditState({ ...editState, maxPerPerson: e.target.value })}
+                                                className="border rounded-lg px-3 py-1.5 text-sm w-full"
+                                                style={css.surface}
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-1 self-end">
+                                            <label className="text-xs font-medium opacity-0 select-none">　</label>
+                                            <div className="flex gap-2">
+                                                <button type="submit"
+                                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                                                    style={{ backgroundColor: 'var(--color-admin-primary)' }}>儲存</button>
+                                                <button type="button" onClick={() => setEditState(null)}
+                                                    className="px-3 py-1.5 rounded-lg text-xs border"
+                                                    style={css.surface}>
+                                                    <span style={css.muted}>取消</span>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </form>
                                 ) : (
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="font-medium">{p.name}</p>
-                                            <p className="text-sm text-gray-500">
+                                    <div className="flex justify-between items-center gap-3">
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-sm" style={css.text}>{p.name}</p>
+                                            <p className="text-xs mt-0.5" style={css.muted}>
                                                 NT$ {p.price}・庫存 {p.stock_qty}
-                                                {p.max_per_person && `・每人限購 ${p.max_per_person} 件`}
+                                                {p.max_per_person ? `・每人限購 ${p.max_per_person} 件` : ''}
                                             </p>
                                         </div>
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 shrink-0">
                                             <button
                                                 onClick={() => setEditState({
                                                     productId: p.id,
@@ -274,105 +318,111 @@ export default function SessionDetailPage() {
                                                     stockQty: String(p.stock_qty),
                                                     maxPerPerson: p.max_per_person ? String(p.max_per_person) : ''
                                                 })}
-                                                className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm"
-                                            >編輯</button>
+                                                className="px-3 py-1.5 rounded-lg text-xs border"
+                                                style={css.surface}>
+                                                <span style={css.muted}>編輯</span>
+                                            </button>
                                             <button
                                                 onClick={() => handleDelete(p.id)}
-                                                className="px-3 py-1 bg-red-100 text-red-600 rounded text-sm"
-                                            >刪除</button>
+                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                                                style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>刪除</button>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         ))}
-
                     </div>
                 )}
             </div>
 
-            {/* add new product list */}
-            <div>
-                <h2 className="text-lg font-semibold mb-3">新增商品</h2>
-                <form onSubmit={handleAddProduct} className="space-y-3">
+            {/* 新增商品 */}
+            <div className="rounded-xl border p-5" style={css.surface}>
+                <h2 className="text-base font-semibold mb-4" style={css.text}>新增商品</h2>
+                <form onSubmit={handleAddProduct} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium mb-1">商品名稱 *</label>
+                        <label className="block text-xs font-medium mb-1" style={css.muted}>商品名稱 *</label>
                         <input
                             type="text"
                             value={name}
                             onChange={e => setName(e.target.value)}
                             required
-                            className="w-full border rounded px-3 py-2 text-sm"
                             placeholder="例：草莓塔"
+                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            style={css.surface}
                         />
                     </div>
                     <div className="flex gap-3">
                         <div className="flex-1">
-                            <label className="block text-sm font-medium mb-1">售價（NT$）*</label>
+                            <label className="block text-xs font-medium mb-1" style={css.muted}>售價（NT$）*</label>
                             <input
-                                type="number"
-                                min="0"
+                                type="number" min="0"
                                 value={price}
                                 onChange={e => setPrice(e.target.value)}
                                 required
-                                className="w-full border rounded px-3 py-2 text-sm"
+                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                                style={css.surface}
                             />
                         </div>
                         <div className="flex-1">
-                            <label className="block text-sm font-medium mb-1">庫存數量 *</label>
+                            <label className="block text-xs font-medium mb-1" style={css.muted}>庫存數量 *</label>
                             <input
-                                type="number"
-                                min="0"
+                                type="number" min="0"
                                 value={stockQty}
                                 onChange={e => setStockQty(e.target.value)}
                                 required
-                                className="w-full border rounded px-3 py-2 text-sm"
+                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                                style={css.surface}
                             />
                         </div>
                         <div className="flex-1">
-                            <label className="block text-sm font-medium mb-1">每人限購（件）</label>
+                            <label className="block text-xs font-medium mb-1" style={css.muted}>每人限購（件）</label>
                             <input
-                                type="number"
-                                min="1"
+                                type="number" min="1"
                                 value={maxPerPerson}
                                 onChange={e => setMaxPerPerson(e.target.value)}
-                                className="w-full border rounded px-3 py-2 text-sm"
                                 placeholder="不填表示無限制"
+                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                                style={css.surface}
                             />
                         </div>
                     </div>
-
-                    {addError && <p className="text-red-500 text-sm">{addError}</p>}
-
+                    {addError && <p className="text-xs" style={{ color: '#DC2626' }}>{addError}</p>}
                     <button
                         type="submit"
                         disabled={adding}
-                        className="w-full bg-blue-500 text-white rounded py-2 text-sm disabled:opacity-50"
+                        className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
                         {adding ? '新增中...' : '新增商品'}
                     </button>
                 </form>
             </div>
 
-            {/* restock schedule section */}
+            {/* 追加庫存排程 */}
             <div>
-                <h2 className="text-lg font-semibold mb-3">追加庫存排程</h2>
+                <h2 className="text-base font-semibold mb-3" style={css.text}>追加庫存排程</h2>
 
-                {/* existing restocks list */}
                 {restocks.length === 0 ? (
-                    <p className="text-gray-400 text-sm mb-4">尚未設定追加庫存</p>
+                    <p className="text-sm mb-4" style={css.muted}>尚未設定追加庫存</p>
                 ) : (
-                    <div className="space-y-2 mb-4">
-                        {restocks.map(r => (
-                            <div key={r.id} className={`border rounded px-4 py-3 text-sm ${!r.is_active ? 'opacity-40' : ''
-                                }`}>
-                                <div className="flex justify-between items-start">
+                    <div className="rounded-xl border overflow-hidden mb-4" style={css.surface}>
+                        {restocks.map((r, idx) => (
+                            <div key={r.id}
+                                className={`p-4 ${idx !== 0 ? 'border-t' : ''} ${!r.is_active ? 'opacity-40' : ''}`}
+                                style={idx !== 0 ? css.border : {}}>
+                                <div className="flex justify-between items-start gap-3">
                                     <div>
-                                        <p className="font-medium">
+                                        <p className="text-sm font-semibold" style={css.text}>
                                             {new Date(r.opens_at).toLocaleString('zh-TW')}
-                                            {r.applied && <span className="ml-2 text-green-600 text-xs">已套用</span>}
-                                            {!r.is_active && <span className="ml-2 text-gray-400 text-xs">已取消</span>}
+                                            {r.applied && (
+                                                <span className="ml-2 text-xs font-normal"
+                                                    style={{ color: '#16A34A' }}>已套用</span>
+                                            )}
+                                            {!r.is_active && (
+                                                <span className="ml-2 text-xs font-normal" style={css.muted}>已取消</span>
+                                            )}
                                         </p>
-                                        <ul className="text-gray-500 mt-1 space-y-0.5">
+                                        <ul className="text-xs mt-1 space-y-0.5" style={css.muted}>
                                             {r.restock_items.map(item => (
                                                 <li key={item.product_id}>
                                                     {item.products.name} +{item.quantity}
@@ -383,8 +433,8 @@ export default function SessionDetailPage() {
                                     {!r.applied && r.is_active && (
                                         <button
                                             onClick={() => handleCancelRestock(r.id)}
-                                            className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs"
-                                        >取消</button>
+                                            className="px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0"
+                                            style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>取消</button>
                                     )}
                                 </div>
                             </div>
@@ -392,57 +442,61 @@ export default function SessionDetailPage() {
                     </div>
                 )}
 
-                {/* add new restock form */}
-                <form onSubmit={handleAddRestock} className="space-y-3 border rounded p-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">開放時間 *</label>
-                        <input
-                            type="datetime-local"
-                            value={restockOpensAt}
-                            onChange={e => setRestockOpensAt(e.target.value)}
-                            required
-                            className="w-full border rounded px-3 py-2 text-sm"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium mb-2">追加數量（填 0 或空白表示不追加此商品）</label>
-                        {session.products.map(p => (
-                            <div key={p.id} className="flex items-center gap-3 mb-2">
-                                <span className="text-sm flex-1">{p.name}</span>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    placeholder="0"
-                                    className="border rounded px-2 py-1 text-sm w-24"
-                                    value={restockItems.find(i => i.productId === p.id)?.quantity ?? ''}
-                                    onChange={e => {
-                                        setRestockItems(prev => {
-                                            const existing = prev.find(i => i.productId === p.id)
-                                            if (existing) {
-                                                return prev.map(i => i.productId === p.id
-                                                    ? { ...i, quantity: e.target.value }
-                                                    : i
-                                                )
-                                            }
-                                            return [...prev, { productId: p.id, quantity: e.target.value }]
-                                        })
-                                    }}
-                                />
-                            </div>
-                        ))}
-                    </div>
-
-                    {restockError && <p className="text-red-500 text-sm">{restockError}</p>}
-
-                    <button
-                        type="submit"
-                        disabled={addingRestock || !restockOpensAt}
-                        className="w-full bg-blue-500 text-white rounded py-2 text-sm disabled:opacity-50"
-                    >
-                        {addingRestock ? '新增中...' : '新增追加庫存排程'}
-                    </button>
-                </form>
+                {/* 新增追加庫存 */}
+                <div className="rounded-xl border p-5" style={css.surface}>
+                    <h3 className="text-sm font-semibold mb-4" style={css.text}>新增排程</h3>
+                    <form onSubmit={handleAddRestock} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-medium mb-1" style={css.muted}>開放時間 *</label>
+                            <input
+                                type="datetime-local"
+                                value={restockOpensAt}
+                                onChange={e => setRestockOpensAt(e.target.value)}
+                                required
+                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                                style={css.surface}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium mb-2" style={css.muted}>
+                                追加數量（填 0 或空白表示不追加此商品）
+                            </label>
+                            {session.products.map(p => (
+                                <div key={p.id} className="flex items-center gap-3 mb-2">
+                                    <span className="text-sm flex-1" style={css.text}>{p.name}</span>
+                                    <input
+                                        type="number" min="0"
+                                        placeholder="0"
+                                        className="border rounded-lg px-3 py-1.5 text-sm w-24"
+                                        style={css.surface}
+                                        value={restockItems.find(i => i.productId === p.id)?.quantity ?? ''}
+                                        onChange={e => {
+                                            setRestockItems(prev => {
+                                                const existing = prev.find(i => i.productId === p.id)
+                                                if (existing) {
+                                                    return prev.map(i => i.productId === p.id
+                                                        ? { ...i, quantity: e.target.value }
+                                                        : i
+                                                    )
+                                                }
+                                                return [...prev, { productId: p.id, quantity: e.target.value }]
+                                            })
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                        {restockError && <p className="text-xs" style={{ color: '#DC2626' }}>{restockError}</p>}
+                        <button
+                            type="submit"
+                            disabled={addingRestock || !restockOpensAt}
+                            className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50"
+                            style={{ backgroundColor: 'var(--color-admin-primary)' }}
+                        >
+                            {addingRestock ? '新增中...' : '新增追加庫存排程'}
+                        </button>
+                    </form>
+                </div>
             </div>
 
         </div>

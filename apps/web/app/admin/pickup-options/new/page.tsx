@@ -1,14 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import Link from 'next/link'
-
-type Role = {
-    id: string
-    name: string
-}
 
 const css = {
     surface: { backgroundColor: 'var(--color-admin-surface)', borderColor: 'var(--color-admin-border)' },
@@ -16,37 +11,33 @@ const css = {
     muted: { color: 'var(--color-admin-muted)' },
 } as const
 
-export default function NewStaffPage() {
+export default function NewPickupOptionPage() {
     const router = useRouter()
 
-    const [displayName, setDisplayName] = useState('')
-    const [email, setEmail] = useState('')
-    const [roleId, setRoleId] = useState('')
-    const [roles, setRoles] = useState<Role[]>([])
+    const [name, setName] = useState('')
+    const [description, setDescription] = useState('')
+    const [extraFee, setExtraFee] = useState('')
+    const [bankOnly, setBankOnly] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
-
-    useEffect(() => {
-        adminFetch('/api/admin/roles')
-            .then(r => r.json())
-            .then(body => {
-                setRoles(body.data ?? [])
-                if (body.data?.length > 0) setRoleId(body.data[0].id)
-            })
-    }, [])
 
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault()
         setLoading(true)
         setError(null)
         try {
-            const res = await adminFetch('/api/admin/staff', {
+            const res = await adminFetch('/api/admin/pickup-options', {
                 method: 'POST',
-                body: JSON.stringify({ displayName, email, roleId }),
+                body: JSON.stringify({
+                    name,
+                    description: description || null,
+                    extraFee: Number(extraFee) || 0,
+                    allowedPaymentMethods: bankOnly ? ['bank_transfer'] : null,
+                }),
             })
             const body = await res.json()
             if (!res.ok) throw new Error(body.error ?? '新增失敗')
-            router.push('/admin/staff')
+            router.push('/admin/pickup-options')
         } catch (e: any) {
             setError(e.message)
         } finally {
@@ -59,56 +50,63 @@ export default function NewStaffPage() {
 
             {/* 頁首 */}
             <div className="flex items-center gap-3 mb-6">
-                <Link href="/admin/staff"
+                <Link href="/admin/pickup-options"
                     className="text-sm px-3 py-1.5 rounded-lg border"
                     style={css.surface}>
                     <span style={css.muted}>← 返回</span>
                 </Link>
-                <h1 className="text-xl font-semibold" style={css.text}>新增人員</h1>
+                <h1 className="text-xl font-semibold" style={css.text}>新增取貨方式</h1>
             </div>
 
             <div className="rounded-xl border p-6" style={css.surface}>
                 <form onSubmit={handleSubmit} className="space-y-5">
                     <div>
-                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>姓名 *</label>
+                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>名稱 *</label>
                         <input
                             type="text"
-                            value={displayName}
-                            onChange={e => setDisplayName(e.target.value)}
+                            value={name}
+                            onChange={e => setName(e.target.value)}
                             required
-                            placeholder="例：王小明"
+                            placeholder="例：自取"
                             className="w-full border rounded-lg px-3 py-2 text-sm"
                             style={css.surface}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>Email *</label>
+                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>說明（選填）</label>
                         <input
-                            type="email"
-                            value={email}
-                            onChange={e => setEmail(e.target.value)}
-                            required
-                            placeholder="example@email.com"
+                            type="text"
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            placeholder="取貨地點或說明"
                             className="w-full border rounded-lg px-3 py-2 text-sm"
                             style={css.surface}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>角色 *</label>
-                        <select
-                            value={roleId}
-                            onChange={e => setRoleId(e.target.value)}
-                            required
+                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>附加費用（NT$，預設 0）</label>
+                        <input
+                            type="number"
+                            min="0"
+                            value={extraFee}
+                            onChange={e => setExtraFee(e.target.value)}
+                            placeholder="0"
                             className="w-full border rounded-lg px-3 py-2 text-sm"
                             style={css.surface}
-                        >
-                            {roles.map(r => (
-                                <option key={r.id} value={r.id}>{r.name}</option>
-                            ))}
-                        </select>
+                        />
                     </div>
+
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={bankOnly}
+                            onChange={e => setBankOnly(e.target.checked)}
+                            className="accent-blue-600"
+                        />
+                        <span style={css.text}>僅限銀行匯款</span>
+                    </label>
 
                     {error && <p className="text-xs" style={{ color: '#DC2626' }}>{error}</p>}
 
@@ -118,7 +116,7 @@ export default function NewStaffPage() {
                         className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50"
                         style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
-                        {loading ? '新增中...' : '新增並寄送邀請信'}
+                        {loading ? '新增中...' : '新增'}
                     </button>
                 </form>
             </div>
