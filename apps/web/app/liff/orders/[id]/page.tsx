@@ -22,6 +22,7 @@ type Order = {
     remit_last5: string | null
     queue_number: number | null
     created_at: string
+    customer_note: string | null
     sessions: { title: string } | null
     order_items: OrderItem[]
 }
@@ -69,6 +70,9 @@ export default function OrderDetailPage() {
     const [cancelling, setCancelling] = useState(false)
     const [remitInput, setRemitInput] = useState('')
     const [remitSubmitting, setRemitSubmitting] = useState(false)
+    const [noteInput, setNoteInput] = useState('')
+    const [noteEditing, setNoteEditing] = useState(false)
+    const [noteSaving, setNoteSaving] = useState(false)
 
     const { combine } = useMinLoading(1000)
     const isLoading = combine(dataLoaded)
@@ -80,6 +84,7 @@ export default function OrderDetailPage() {
                 if (body.data) {
                     setOrder(body.data)
                     setRemitInput(body.data.remit_last5 ?? '')
+                    setNoteInput(body.data.customer_note ?? '')
                 } else setError(body.message ?? '載入失敗')
             })
             .catch(() => setError('載入失敗，請稍後再試'))
@@ -139,6 +144,22 @@ export default function OrderDetailPage() {
         } finally {
             setSubmitting(false)
             setCancelling(false)
+        }
+    }
+
+    async function saveNote() {
+        if (!order) return
+        setNoteSaving(true)
+        try {
+            await fetch(`/api/orders/${order.id}/note`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'x-liff-token': 'mock-token' },
+                body: JSON.stringify({ note: noteInput.trim() || null })
+            })
+            setOrder({ ...order, customer_note: noteInput.trim() || null })
+            setNoteEditing(false)
+        } finally {
+            setNoteSaving(false)
         }
     }
 
@@ -404,6 +425,53 @@ export default function OrderDetailPage() {
                                         付款後店家將確認並完成訂單
                                     </p>
                                 </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 備註卡 */}
+                    {order.status !== 'cancelled' && (
+                        <div className="rounded-2xl border p-4" style={css.surface}>
+                            <div className="flex justify-between items-center mb-2">
+                                <p className="text-xs font-semibold" style={css.muted}>備註（給店家的留言）</p>
+                                {!noteEditing && (
+                                    <button
+                                        onClick={() => { setNoteInput(order.customer_note ?? ''); setNoteEditing(true) }}
+                                        className="text-xs underline underline-offset-2"
+                                        style={css.accent}
+                                    >{order.customer_note ? '編輯' : '新增備註'}</button>
+                                )}
+                            </div>
+
+                            {noteEditing ? (
+                                <div className="space-y-2">
+                                    <textarea
+                                        value={noteInput}
+                                        onChange={e => setNoteInput(e.target.value)}
+                                        rows={3}
+                                        placeholder="想說的話"
+                                        className="w-full border rounded-xl px-3 py-2 text-sm resize-none"
+                                        style={css.surface}
+                                        autoFocus
+                                    />
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={saveNote}
+                                            disabled={noteSaving}
+                                            className="flex-1 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
+                                            style={css.primary}
+                                        >{noteSaving ? '儲存中...' : '儲存'}</button>
+                                        <button
+                                            onClick={() => setNoteEditing(false)}
+                                            className="flex-1 py-2 rounded-xl text-sm border"
+                                            style={{ ...css.surface, color: 'var(--color-liff-muted)' }}
+                                        >取消</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-sm" style={order.customer_note ? css.text : css.muted}>
+                                    {order.customer_note ?? '尚未填寫備註'}
+                                </p>
                             )}
                         </div>
                     )}
