@@ -154,7 +154,7 @@ export default function PickupOptionsPage() {
                                                     ? { backgroundColor: '#DCFCE7', color: '#166534' }
                                                     : { backgroundColor: '#F3F4F6', color: '#6B7280' }
                                                 }>
-                                                {opt.is_active ? '上架' : '下架'}
+                                                {opt.is_active ? '啟用' : '停用'}
                                             </span>
                                             {opt.allowed_payment_methods && (
                                                 <span className="text-xs px-2.5 py-1 rounded-full font-medium"
@@ -189,7 +189,7 @@ export default function PickupOptionsPage() {
                                                 ? { backgroundColor: '#FEE2E2', color: '#991B1B' }
                                                 : { backgroundColor: '#DCFCE7', color: '#166534' }
                                             }>
-                                            {opt.is_active ? '下架' : '上架'}
+                                            {opt.is_active ? '啟用' : '停用'}
                                         </button>
                                     </div>
                                 </div>
