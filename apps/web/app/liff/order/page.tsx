@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import { useMinLoading } from '@/hooks/useMinLoading'
 
@@ -59,11 +60,16 @@ const css = {
 } as const
 
 export default function OrderPage() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const sessionId = searchParams.get('sessionId')
+
     const [session, setSession] = useState<Session | null>(null)
     const [quantities, setQuantities] = useState<Record<string, number>>({})
     const [dataLoaded, setDataLoaded] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [orderId, setOrderId] = useState<string | null>(null)
+    const [orderNumber, setOrderNumber] = useState<number | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [quotaUsed, setQuotaUsed] = useState(0)
 
@@ -76,6 +82,10 @@ export default function OrderPage() {
     const { combine } = useMinLoading(1500)
     const isLoading = combine(dataLoaded)
 
+    const activeUrl = sessionId
+        ? `/api/sessions/active?sessionId=${sessionId}`
+        : '/api/sessions/active'
+
     useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 1000)
         return () => clearInterval(timer)
@@ -84,14 +94,14 @@ export default function OrderPage() {
     useEffect(() => {
         if (!session?.next_restock_at) return
         if (new Date(session.next_restock_at).getTime() - now <= 0) {
-            fetch('/api/sessions/active')
+            fetch(activeUrl)
                 .then(res => res.json())
                 .then(body => { if (body.data) setSession(body.data) })
         }
     }, [now, session?.next_restock_at])
 
     useEffect(() => {
-        fetch('/api/sessions/active')
+        fetch(activeUrl)
             .then(res => res.json())
             .then(body => {
                 if (body.data) {
@@ -172,8 +182,19 @@ export default function OrderPage() {
         <div className="min-h-screen flex flex-col items-center justify-center p-4" style={css.bg}>
             <div className="text-5xl mb-4">🎉</div>
             <h2 className="text-xl font-bold mb-2" style={css.text}>訂單已送出！</h2>
-            <p className="text-sm mb-1" style={css.muted}>訂單編號</p>
-            <p className="font-mono text-xs break-all text-center px-4" style={css.muted}>{orderId}</p>
+            {orderNumber && (
+                <>
+                    <p className="text-sm mb-1" style={css.muted}>訂單單號</p>
+                    <p className="text-2xl font-bold tabular-nums" style={css.accent}>
+                        #{String(orderNumber).padStart(4, '0')}
+                    </p>
+                </>
+            )}
+            <button
+                onClick={() => router.push('/liff/status')}
+                className="mt-6 text-sm underline underline-offset-2"
+                style={css.muted}
+            >查看訂單狀態</button>
         </div>
     )
 
@@ -195,6 +216,7 @@ export default function OrderPage() {
             const body = await res.json()
             if (!res.ok) throw new Error(body.error ?? '訂單送出失敗')
             setOrderId(body.data.orderId)
+            setOrderNumber(body.data.orderNumber)
         } catch (e: any) {
             setError(e.message)
         } finally {
@@ -208,6 +230,15 @@ export default function OrderPage() {
     if (step === 'items') return (
         <div className={S.outer} style={css.bg}>
             <div className={S.inner}>
+                {sessionId && (
+                    <button
+                        onClick={() => router.push('/liff/sessions')}
+                        className={S.backBtn}
+                        style={css.muted}
+                    >
+                        ← 返回選單
+                    </button>
+                )}
                 <h1 className={S.title} style={css.text}>{session.title}</h1>
 
                 {/* opens_at 倒數 */}
