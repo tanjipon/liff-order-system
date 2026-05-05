@@ -278,6 +278,11 @@ export default function AdminDashBoard() {
                                             className="px-4 py-1.5 rounded-lg text-xs font-semibold"
                                             style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>取消</button>
                                     </>)}
+                                    {order.status === 'pending_payment' && order.payment_method === 'cash' && (
+                                        <button onClick={() => handleAction(order.id, 'confirm-payment')}
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white"
+                                            style={{ backgroundColor: '#16A34A' }}>確認收現</button>
+                                    )}
                                     {order.status === 'payment_submitted' && (
                                         <button onClick={() => handleAction(order.id, 'confirm-payment')}
                                             className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white"
