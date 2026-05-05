@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server'
 import { verifyLiffToken } from '@/lib/auth/verifyLiff'
 import { errorResponse } from '@/lib/api/response'
-import { assertCancellable } from '@/lib/orderStatus'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
 
 export async function GET(
@@ -25,6 +24,7 @@ export async function GET(
                 remit_last5,
                 queue_number,
                 created_at,
+                customer_note,
                 sessions ( title ),
                 order_items (
                     quantity,

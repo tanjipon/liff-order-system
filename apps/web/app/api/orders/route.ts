@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
                 remit_last5,
                 queue_number,
                 created_at,
+                customer_note,
                 sessions ( title ),
                 order_items (
                     quantity,

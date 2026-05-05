@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
             .select(`
                 id, status, line_display_name, total_amount,
                 queue_number, payment_method, remit_last5, created_at,
-                session_id,
+                session_id, customer_note, admin_note,
                 ${orderItemsSelect}
             `, { count: 'exact' })
             .order('created_at', { ascending: false })
