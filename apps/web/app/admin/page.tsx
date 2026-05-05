@@ -16,6 +16,8 @@ type Order = {
     payment_method: string
     remit_last5: string | null
     created_at: string
+    customer_note: string | null
+    admin_note: string | null
     order_items: {
         product_id: string
         quantity: number
@@ -58,6 +60,9 @@ export default function AdminDashBoard() {
         action: 'reject' | 'cancel'
         reason: string
     } | null>(null)
+    const [adminNoteInputs, setAdminNoteInputs] = useState<Record<string, string>>({})
+    const [adminNoteEditing, setAdminNoteEditing] = useState<string | null>(null)
+    const [adminNoteSaving, setAdminNoteSaving] = useState<string | null>(null)
 
     // filters
     const [filterStatus, setFilterStatus] = useState('')
@@ -74,8 +79,12 @@ export default function AdminDashBoard() {
         try {
             const res = await adminFetch('/api/admin/orders')
             const body = await res.json()
-            if (body.data) setOrders(body.data)
-            else setError(body.message ?? '載入失敗')
+            if (body.data) {
+                setOrders(body.data)
+                const notes: Record<string, string> = {}
+                body.data.forEach((o: Order) => { notes[o.id] = o.admin_note ?? '' })
+                setAdminNoteInputs(notes)
+            } else setError(body.message ?? '載入失敗')
         } catch {
             setError('載入失敗')
         } finally {
@@ -98,6 +107,22 @@ export default function AdminDashBoard() {
             .then(r => r.json())
             .then(body => setProducts(body.data?.products ?? []))
     }, [filterSessionId])
+
+    async function saveAdminNote(orderId: string) {
+        setAdminNoteSaving(orderId)
+        try {
+            await adminFetch(`/api/admin/orders/${orderId}/note`, {
+                method: 'PATCH',
+                body: JSON.stringify({ note: adminNoteInputs[orderId]?.trim() || null })
+            })
+            setOrders(prev => prev.map(o =>
+                o.id === orderId ? { ...o, admin_note: adminNoteInputs[orderId]?.trim() || null } : o
+            ))
+            setAdminNoteEditing(null)
+        } finally {
+            setAdminNoteSaving(null)
+        }
+    }
 
     async function handleAction(orderId: string, action: string, body?: object) {
         await adminFetch(`/api/admin/orders/${orderId}/${action}`, {
@@ -315,6 +340,58 @@ export default function AdminDashBoard() {
                                         style={css.surface}>取消</button>
                                 </div>
                             )}
+
+                            {/* 備註區 */}
+                            <div className="px-4 pb-4 border-t pt-3 space-y-2" style={css.border}>
+                                {/* 客戶備註（唯讀） */}
+                                {order.customer_note && (
+                                    <p className="text-xs" style={css.muted}>
+                                        <span className="font-semibold">客戶備註：</span>{order.customer_note}
+                                    </p>
+                                )}
+
+                                {/* 店家備註：檢視 / 編輯 */}
+                                {adminNoteEditing === order.id ? (
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            type="text"
+                                            value={adminNoteInputs[order.id] ?? ''}
+                                            onChange={e => setAdminNoteInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                            placeholder="店家備註（僅內部可見）"
+                                            className="flex-1 border rounded-lg px-3 py-1.5 text-xs"
+                                            style={css.surface}
+                                            autoFocus
+                                        />
+                                        <button
+                                            onClick={() => saveAdminNote(order.id)}
+                                            disabled={adminNoteSaving === order.id}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0 disabled:opacity-50"
+                                            style={css.primary}>
+                                            {adminNoteSaving === order.id ? '儲存中...' : '儲存'}
+                                        </button>
+                                        <button
+                                            onClick={() => setAdminNoteEditing(null)}
+                                            className="px-3 py-1.5 rounded-lg text-xs border shrink-0"
+                                            style={css.surface}>取消</button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-xs flex-1" style={css.muted}>
+                                            <span className="font-semibold">店家備註：</span>
+                                            {order.admin_note ?? <span className="italic">尚未填寫</span>}
+                                        </p>
+                                        <button
+                                            onClick={() => {
+                                                setAdminNoteInputs(prev => ({ ...prev, [order.id]: order.admin_note ?? '' }))
+                                                setAdminNoteEditing(order.id)
+                                            }}
+                                            className="text-xs underline underline-offset-2 shrink-0"
+                                            style={{ color: 'var(--color-admin-primary)' }}>
+                                            {order.admin_note ? '編輯' : '新增'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     ))}
                 </div>
