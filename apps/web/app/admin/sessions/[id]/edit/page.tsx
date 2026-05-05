@@ -46,8 +46,8 @@ export default function EditSessionPage() {
                 method: 'PATCH',
                 body: JSON.stringify({
                     title,
-                    opensAt: opensAt || null,
-                    closesAt: closesAt || null,
+                    opensAt: opensAt ? toISO(opensAt) : null,
+                    closesAt: closesAt ? toISO(closesAt) : null,
                     perPersonLimit: perPersonLimit ? Number(perPersonLimit) : null,
                 }),
             })
@@ -141,6 +141,14 @@ export default function EditSessionPage() {
     )
 }
 
+// Convert UTC ISO from DB to local time for datetime-local input
 function toDatetimeLocal(iso: string): string {
-    return iso.slice(0, 16)
+    const d = new Date(iso)
+    const offset = d.getTimezoneOffset() * 60000
+    return new Date(d.getTime() - offset).toISOString().slice(0, 16)
+}
+
+// Convert datetime-local value (treated as local time) to UTC ISO for DB
+function toISO(datetimeLocal: string): string {
+    return new Date(datetimeLocal).toISOString()
 }

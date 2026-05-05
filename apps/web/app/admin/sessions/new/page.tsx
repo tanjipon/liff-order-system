@@ -30,8 +30,8 @@ export default function NewSessionPage() {
                 method: 'POST',
                 body: JSON.stringify({
                     title,
-                    opensAt: opensAt || null,
-                    closesAt: closesAt || null,
+                    opensAt: opensAt ? new Date(opensAt).toISOString() : null,
+                    closesAt: closesAt ? new Date(closesAt).toISOString() : null,
                     perPersonLimit: perPersonLimit ? Number(perPersonLimit) : null,
                 }),
             })
