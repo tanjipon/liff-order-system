@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
+import AdminError from '@/components/admin/AdminError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 
 type StaffMember = {
@@ -61,7 +62,7 @@ export default function StaffPage() {
     }
 
     if (isLoading) return <AdminSpinner />
-    if (error) return <div className="p-8 text-sm" style={{ color: '#DC2626' }}>{error}</div>
+    if (error) return <AdminError error={error} onRetry={loadStaff} />
 
     return (
         <div className="p-6 max-w-3xl mx-auto">

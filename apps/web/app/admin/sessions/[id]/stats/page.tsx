@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
+import AdminError from '@/components/admin/AdminError'
 import Link from 'next/link'
 
 type ProductStat = {
@@ -63,7 +64,7 @@ export default function SessionStatsPage() {
     }, [])
 
     if (loading) return <AdminSpinner />
-    if (error) return <div className="p-8 text-sm" style={{ color: '#DC2626' }}>{error}</div>
+    if (error) return <AdminError error={error} />
     if (!stats) return null
 
     return (

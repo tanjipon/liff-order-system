@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
+import AdminError from '@/components/admin/AdminError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import Pagination from '@/components/admin/Pagination'
 
@@ -133,9 +134,7 @@ export default function AdminDashBoard() {
     }
 
     if (isLoading) return <AdminSpinner />
-    if (error) return (
-        <div className="p-8 text-sm" style={{ color: '#DC2626' }}>{error}</div>
-    )
+    if (error) return <AdminError error={error} onRetry={loadOrders} />
 
     const ACTIVE_STATUSES = ['pending', 'in_production', 'pending_payment', 'payment_submitted']
     const PAGE_LIMIT = 20

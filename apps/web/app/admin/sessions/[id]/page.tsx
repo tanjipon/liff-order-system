@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
+import AdminError from '@/components/admin/AdminError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import Link from 'next/link'
 
@@ -190,7 +191,7 @@ export default function SessionDetailPage() {
     }
 
     if (isLoading) return <AdminSpinner />
-    if (error) return <div className="p-8 text-sm" style={{ color: '#DC2626' }}>{error}</div>
+    if (error) return <AdminError error={error} onRetry={loadSession} />
     if (!session) return null
 
     return (
