@@ -80,7 +80,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </aside>
 
             {/* Main content */}
-            <main className="flex-1 overflow-auto">
+            <main id="admin-main" className="flex-1 overflow-auto">
                 {children}
             </main>
         </div>

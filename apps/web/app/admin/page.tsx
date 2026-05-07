@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
 import AdminError from '@/components/admin/AdminError'
@@ -52,10 +52,16 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const PAGE_LIMIT = 20
+
 export default function AdminDashBoard() {
     const [orders, setOrders] = useState<Order[]>([])
+    const [total, setTotal] = useState(0)
+    const [totalPages, setTotalPages] = useState(0)
     const [dataLoaded, setDataLoaded] = useState(false)
+    const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
     const [actionState, setActionState] = useState<{
         orderId: string
         action: 'reject' | 'cancel'
@@ -65,7 +71,6 @@ export default function AdminDashBoard() {
     const [adminNoteEditing, setAdminNoteEditing] = useState<string | null>(null)
     const [adminNoteSaving, setAdminNoteSaving] = useState<string | null>(null)
 
-    // filters
     const [filterStatus, setFilterStatus] = useState('')
     const [filterSessionId, setFilterSessionId] = useState('')
     const [filterProductId, setFilterProductId] = useState('')
@@ -76,30 +81,56 @@ export default function AdminDashBoard() {
     const { combine } = useMinLoading(1000)
     const isLoading = combine(dataLoaded)
 
-    async function loadOrders() {
+    const fetchOrders = useCallback(async (p: number, scroll = false) => {
+        setLoading(true)
+        setError(null)
         try {
-            const res = await adminFetch('/api/admin/orders')
+            const params = new URLSearchParams({ page: String(p), limit: String(PAGE_LIMIT) })
+            if (filterStatus) params.set('status', filterStatus)
+            if (filterSessionId) params.set('sessionId', filterSessionId)
+            if (filterProductId) params.set('productId', filterProductId)
+
+            const res = await adminFetch(`/api/admin/orders?${params}`)
             const body = await res.json()
             if (body.data) {
                 setOrders(body.data)
+                setTotal(body.total ?? 0)
+                setTotalPages(body.totalPages ?? 0)
                 const notes: Record<string, string> = {}
                 body.data.forEach((o: Order) => { notes[o.id] = o.admin_note ?? '' })
                 setAdminNoteInputs(notes)
-            } else setError(body.message ?? '載入失敗')
-        } catch {
-            setError('載入失敗')
+                if (scroll) {
+                    requestAnimationFrame(() => {
+                        document.getElementById('admin-main')?.scrollTo({ top: 0, behavior: 'smooth' })
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                    })
+                }
+            } else {
+                setError(body.message ?? '載入失敗')
+            }
+        } catch (e: any) {
+            setError(e.message ?? '載入失敗')
         } finally {
+            setLoading(false)
             setDataLoaded(true)
         }
-    }
+    }, [filterStatus, filterSessionId, filterProductId])
 
+    // 初次載入
     useEffect(() => {
-        loadOrders()
+        fetchOrders(1)
         adminFetch('/api/admin/sessions')
             .then(r => r.json())
             .then(body => setSessions(body.data ?? []))
     }, [])
 
+    // filter 改變時重設到第 1 頁並重新 fetch
+    useEffect(() => {
+        setPage(1)
+        fetchOrders(1)
+    }, [filterStatus, filterSessionId, filterProductId])
+
+    // 選 session 後載入商品
     useEffect(() => {
         setFilterProductId('')
         setProducts([])
@@ -130,32 +161,18 @@ export default function AdminDashBoard() {
             method: 'PATCH',
             body: body ? JSON.stringify(body) : undefined
         })
-        loadOrders()
+        fetchOrders(page)
     }
-
-    if (isLoading) return <AdminSpinner />
-    if (error) return <AdminError error={error} onRetry={loadOrders} />
-
-    const ACTIVE_STATUSES = ['pending', 'in_production', 'pending_payment', 'payment_submitted']
-    const PAGE_LIMIT = 20
-
-    let filteredOrders = orders.filter(o => ACTIVE_STATUSES.includes(o.status))
-    if (filterStatus) filteredOrders = filteredOrders.filter(o => o.status === filterStatus)
-    if (filterSessionId) filteredOrders = filteredOrders.filter(o => o.session_id === filterSessionId)
-    if (filterProductId) filteredOrders = filteredOrders.filter(o =>
-        o.order_items.some((i: any) => i.product_id === filterProductId)
-    )
-
-    const hasFilter = filterStatus || filterSessionId || filterProductId
-    const totalActive = orders.filter(o => ACTIVE_STATUSES.includes(o.status)).length
-
-    const totalPages = Math.ceil(filteredOrders.length / PAGE_LIMIT)
-    const pagedOrders = filteredOrders.slice((page - 1) * PAGE_LIMIT, page * PAGE_LIMIT)
 
     function handlePageChange(p: number) {
         setPage(p)
-        window.scrollTo({ top: 0, behavior: 'smooth' })
+        fetchOrders(p, true)
     }
+
+    const hasFilter = filterStatus || filterSessionId || filterProductId
+
+    if (isLoading) return <AdminSpinner />
+    if (error) return <AdminError error={error} onRetry={() => fetchOrders(page)} />
 
     return (
         <div className="p-6 max-w-3xl mx-auto" style={{ minHeight: '100vh' }}>
@@ -165,15 +182,13 @@ export default function AdminDashBoard() {
                 <div>
                     <h1 className="text-xl font-semibold" style={css.text}>訂單管理</h1>
                     <p className="text-sm mt-0.5" style={css.muted}>
-                        {hasFilter
-                            ? `篩選結果 ${filteredOrders.length} 筆（共 ${totalActive} 筆進行中）`
-                            : `${totalActive} 筆進行中`
-                        }
+                        {total} 筆{hasFilter ? '（篩選結果）' : '進行中'}
                     </p>
                 </div>
                 <button
-                    onClick={loadOrders}
-                    className="text-sm px-4 py-2 rounded-lg border"
+                    onClick={() => fetchOrders(page)}
+                    disabled={loading}
+                    className="text-sm px-4 py-2 rounded-lg border cursor-pointer disabled:opacity-50"
                     style={css.surface}
                 >
                     <span style={css.muted}>重新整理</span>
@@ -183,10 +198,9 @@ export default function AdminDashBoard() {
             {/* 篩選列 */}
             <div className="rounded-xl border p-3 mb-4 space-y-2" style={css.surface}>
                 <div className="flex flex-col md:flex-row gap-2">
-                    {/* 狀態 */}
                     <select
                         value={filterStatus}
-                        onChange={e => { setFilterStatus(e.target.value); setPage(1) }}
+                        onChange={e => setFilterStatus(e.target.value)}
                         className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full"
                         style={css.surface}
                     >
@@ -196,10 +210,9 @@ export default function AdminDashBoard() {
                         ))}
                     </select>
 
-                    {/* 開單 */}
                     <select
                         value={filterSessionId}
-                        onChange={e => { setFilterSessionId(e.target.value); setPage(1) }}
+                        onChange={e => setFilterSessionId(e.target.value)}
                         className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full"
                         style={css.surface}
                     >
@@ -209,10 +222,9 @@ export default function AdminDashBoard() {
                         ))}
                     </select>
 
-                    {/* 商品 */}
                     <select
                         value={filterProductId}
-                        onChange={e => { setFilterProductId(e.target.value); setPage(1) }}
+                        onChange={e => setFilterProductId(e.target.value)}
                         disabled={!filterSessionId}
                         className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full disabled:opacity-40"
                         style={css.surface}
@@ -226,7 +238,7 @@ export default function AdminDashBoard() {
 
                 {hasFilter && (
                     <button
-                        onClick={() => { setFilterStatus(''); setFilterSessionId(''); setFilterProductId(''); setPage(1) }}
+                        onClick={() => { setFilterStatus(''); setFilterSessionId(''); setFilterProductId('') }}
                         className="text-xs px-3 py-1 rounded-lg border"
                         style={css.surface}
                     >
@@ -235,7 +247,7 @@ export default function AdminDashBoard() {
                 )}
             </div>
 
-            {filteredOrders.length === 0 ? (
+            {orders.length === 0 && !loading ? (
                 <div className="p-12 text-center">
                     <p className="text-sm" style={css.muted}>
                         {hasFilter ? '沒有符合篩選條件的訂單' : '目前沒有進行中的訂單'}
@@ -244,7 +256,7 @@ export default function AdminDashBoard() {
             ) : (
                 <>
                 <div className="space-y-3">
-                    {pagedOrders.map((order) => (
+                    {orders.map((order) => (
                         <div key={order.id}
                             className="rounded-xl border overflow-hidden"
                             style={css.surface}>
@@ -342,14 +354,12 @@ export default function AdminDashBoard() {
 
                             {/* 備註區 */}
                             <div className="px-4 pb-4 border-t pt-3 space-y-2" style={css.border}>
-                                {/* 客戶備註（唯讀） */}
                                 {order.customer_note && (
                                     <p className="text-xs" style={css.muted}>
                                         <span className="font-semibold">客戶備註：</span>{order.customer_note}
                                     </p>
                                 )}
 
-                                {/* 店家備註：檢視 / 編輯 */}
                                 {adminNoteEditing === order.id ? (
                                     <div className="flex gap-2 items-center">
                                         <input
@@ -397,7 +407,7 @@ export default function AdminDashBoard() {
                 <Pagination
                     page={page}
                     totalPages={totalPages}
-                    total={filteredOrders.length}
+                    total={total}
                     limit={PAGE_LIMIT}
                     onChange={handlePageChange}
                 />

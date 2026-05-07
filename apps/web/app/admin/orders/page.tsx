@@ -90,7 +90,7 @@ export default function OrderHistoryPage() {
             .then(body => setProducts(body.data?.products ?? []))
     }, [sessionId])
 
-    async function fetchOrders(p: number) {
+    async function fetchOrders(p: number, scroll = false) {
         setLoading(true)
         const params = new URLSearchParams({ history: 'true', page: String(p), limit: String(LIMIT) })
         if (status) params.set('status', status)
@@ -107,6 +107,12 @@ export default function OrderHistoryPage() {
         setPage(p)
         setLoading(false)
         setSearched(true)
+        if (scroll) {
+            requestAnimationFrame(() => {
+                document.getElementById('admin-main')?.scrollTo({ top: 0, behavior: 'smooth' })
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+            })
+        }
     }
 
     async function handleSearch() {
@@ -114,8 +120,7 @@ export default function OrderHistoryPage() {
     }
 
     function handlePageChange(p: number) {
-        fetchOrders(p)
-        window.scrollTo({ top: 0, behavior: 'smooth' })
+        fetchOrders(p, true)
     }
 
     async function handleExport() {

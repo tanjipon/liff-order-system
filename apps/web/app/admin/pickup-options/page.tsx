@@ -190,7 +190,7 @@ export default function PickupOptionsPage() {
                                                 ? { backgroundColor: '#FEE2E2', color: '#991B1B' }
                                                 : { backgroundColor: '#DCFCE7', color: '#166534' }
                                             }>
-                                            {opt.is_active ? '啟用' : '停用'}
+                                            {opt.is_active ? '停用' : '啟用'}
                                         </button>
                                     </div>
                                 </div>
