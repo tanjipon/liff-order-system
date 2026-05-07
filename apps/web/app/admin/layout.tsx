@@ -65,7 +65,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className="flex items-center px-4 py-2 mx-2 rounded-full text-sm transition-colors"
+                                className="flex items-center px-4 py-2 text-sm transition-colors"
                                 style={{
                                     backgroundColor: isActive ? 'var(--color-admin-sidebar-active)' : 'transparent',
                                     color: isActive ? 'var(--color-admin-primary)' : 'var(--color-admin-muted)',
