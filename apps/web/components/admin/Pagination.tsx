@@ -41,7 +41,7 @@ export default function Pagination({ page, totalPages, total, limit, onChange }:
                 <button
                     onClick={() => onChange(page - 1)}
                     disabled={page === 1}
-                    className="px-3 py-1.5 rounded-lg text-xs border disabled:opacity-40"
+                    className="px-3 py-1.5 rounded-lg text-xs border disabled:opacity-40 cursor-pointer"
                     style={css.surface}
                 >
                     <span style={css.muted}>← 上一頁</span>
@@ -54,7 +54,7 @@ export default function Pagination({ page, totalPages, total, limit, onChange }:
                         <button
                             key={p}
                             onClick={() => onChange(p as number)}
-                            className="w-8 h-8 rounded-lg text-xs font-medium border"
+                            className="w-8 h-8 rounded-lg text-xs font-medium border cursor-pointer"
                             style={p === page
                                 ? { backgroundColor: 'var(--color-admin-primary)', color: '#fff', borderColor: 'var(--color-admin-primary)' }
                                 : css.surface
@@ -68,7 +68,7 @@ export default function Pagination({ page, totalPages, total, limit, onChange }:
                 <button
                     onClick={() => onChange(page + 1)}
                     disabled={page === totalPages}
-                    className="px-3 py-1.5 rounded-lg text-xs border disabled:opacity-40"
+                    className="px-3 py-1.5 rounded-lg text-xs border disabled:opacity-40 cursor-pointer"
                     style={css.surface}
                 >
                     <span style={css.muted}>下一頁 →</span>

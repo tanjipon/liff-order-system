@@ -57,7 +57,7 @@ export default function LoginPage() {
                     <button
                         onClick={handleLogin}
                         disabled={loading || !email || !password}
-                        className="w-full py-2 bg-gray-800 text-white rounded text-sm disabled:opacity-40"
+                        className="w-full py-2 bg-gray-800 text-white rounded text-sm disabled:opacity-40 cursor-pointer"
                     >
                         {loading ? '登入中...' : '登入'}
                     </button>

@@ -122,21 +122,21 @@ export default function StaffPage() {
                             <div className="shrink-0 flex gap-2">
                                 <button
                                     onClick={() => handleResendInvite(s.userId)}
-                                    className="px-3 py-1.5 rounded-lg text-xs border"
+                                    className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
                                     style={css.surface}>
                                     <span style={css.muted}>重送邀請</span>
                                 </button>
                                 {s.isActive ? (
                                     <button
                                         onClick={() => handleDeactivate(s.userId)}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                                         style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>
                                         停用
                                     </button>
                                 ) : (
                                     <button
                                         onClick={() => handleActivate(s.userId)}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                                         style={{ backgroundColor: '#DCFCE7', color: '#166534' }}>
                                         啟用
                                     </button>

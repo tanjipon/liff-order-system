@@ -51,7 +51,7 @@ export default function NewPickupOptionPage() {
             {/* 頁首 */}
             <div className="flex items-center gap-3 mb-6">
                 <Link href="/admin/pickup-options"
-                    className="text-sm px-3 py-1.5 rounded-lg border"
+                    className="text-sm px-3 py-1.5 rounded-lg border cursor-pointer"
                     style={css.surface}>
                     <span style={css.muted}>← 返回</span>
                 </Link>
@@ -113,7 +113,7 @@ export default function NewPickupOptionPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
                         style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
                         {loading ? '新增中...' : '新增'}

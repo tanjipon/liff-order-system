@@ -119,14 +119,14 @@ export default function RolesPage() {
                                         <button
                                             onClick={() => handleSave(role.id)}
                                             disabled={saving}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 cursor-pointer"
                                             style={{ backgroundColor: 'var(--color-admin-primary)' }}
                                         >
                                             {saving ? '儲存中...' : '儲存'}
                                         </button>
                                         <button
                                             onClick={() => setEditingRoleId(null)}
-                                            className="px-3 py-1.5 rounded-lg text-xs border"
+                                            className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
                                             style={css.surface}
                                         >
                                             <span style={css.muted}>取消</span>
@@ -135,7 +135,7 @@ export default function RolesPage() {
                                 ) : (
                                     <button
                                         onClick={() => startEdit(role)}
-                                        className="px-3 py-1.5 rounded-lg text-xs border"
+                                        className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
                                         style={css.surface}
                                     >
                                         <span style={css.muted}>編輯權限</span>

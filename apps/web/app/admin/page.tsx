@@ -201,7 +201,7 @@ export default function AdminDashBoard() {
                     <select
                         value={filterStatus}
                         onChange={e => setFilterStatus(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full"
+                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full cursor-pointer"
                         style={css.surface}
                     >
                         <option value="">所有狀態</option>
@@ -213,7 +213,7 @@ export default function AdminDashBoard() {
                     <select
                         value={filterSessionId}
                         onChange={e => setFilterSessionId(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full"
+                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full cursor-pointer"
                         style={css.surface}
                     >
                         <option value="">所有開單</option>
@@ -226,7 +226,7 @@ export default function AdminDashBoard() {
                         value={filterProductId}
                         onChange={e => setFilterProductId(e.target.value)}
                         disabled={!filterSessionId}
-                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full disabled:opacity-40"
+                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full disabled:opacity-40 cursor-pointer"
                         style={css.surface}
                     >
                         <option value="">所有商品</option>
@@ -239,7 +239,7 @@ export default function AdminDashBoard() {
                 {hasFilter && (
                     <button
                         onClick={() => { setFilterStatus(''); setFilterSessionId(''); setFilterProductId('') }}
-                        className="text-xs px-3 py-1 rounded-lg border"
+                        className="text-xs px-3 py-1 rounded-lg border cursor-pointer"
                         style={css.surface}
                     >
                         <span style={css.muted}>清除篩選</span>
@@ -300,28 +300,28 @@ export default function AdminDashBoard() {
                                 <div className="shrink-0 flex gap-3 flex-wrap">
                                     {order.status === 'pending' && (<>
                                         <button onClick={() => handleAction(order.id, 'accept')}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white"
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
                                             style={{ backgroundColor: 'var(--color-admin-primary)' }}>接單</button>
                                         <button onClick={() => setActionState({ orderId: order.id, action: 'reject', reason: '' })}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold"
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                                             style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>拒絕</button>
                                     </>)}
                                     {order.status === 'in_production' && (<>
                                         <button onClick={() => handleAction(order.id, 'ready')}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white"
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
                                             style={{ backgroundColor: '#16A34A' }}>製作完成</button>
                                         <button onClick={() => setActionState({ orderId: order.id, action: 'cancel', reason: '' })}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold"
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                                             style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>取消</button>
                                     </>)}
                                     {order.status === 'pending_payment' && order.payment_method === 'cash' && (
                                         <button onClick={() => handleAction(order.id, 'confirm-payment')}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white"
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
                                             style={{ backgroundColor: '#16A34A' }}>確認收現</button>
                                     )}
                                     {order.status === 'payment_submitted' && (
                                         <button onClick={() => handleAction(order.id, 'confirm-payment')}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white"
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
                                             style={{ backgroundColor: '#16A34A' }}>確認付款</button>
                                     )}
                                 </div>
@@ -344,10 +344,10 @@ export default function AdminDashBoard() {
                                             handleAction(actionState.orderId, actionState.action, { reason: actionState.reason })
                                             setActionState(null)
                                         }}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
                                         style={{ backgroundColor: '#DC2626' }}>確認</button>
                                     <button onClick={() => setActionState(null)}
-                                        className="px-3 py-1.5 rounded-lg text-xs border"
+                                        className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
                                         style={css.surface}>取消</button>
                                 </div>
                             )}
@@ -374,13 +374,13 @@ export default function AdminDashBoard() {
                                         <button
                                             onClick={() => saveAdminNote(order.id)}
                                             disabled={adminNoteSaving === order.id}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0 disabled:opacity-50"
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0 disabled:opacity-50 cursor-pointer"
                                             style={css.primary}>
                                             {adminNoteSaving === order.id ? '儲存中...' : '儲存'}
                                         </button>
                                         <button
                                             onClick={() => setAdminNoteEditing(null)}
-                                            className="px-3 py-1.5 rounded-lg text-xs border shrink-0"
+                                            className="px-3 py-1.5 rounded-lg text-xs border shrink-0 cursor-pointer"
                                             style={css.surface}>取消</button>
                                     </div>
                                 ) : (
@@ -394,7 +394,7 @@ export default function AdminDashBoard() {
                                                 setAdminNoteInputs(prev => ({ ...prev, [order.id]: order.admin_note ?? '' }))
                                                 setAdminNoteEditing(order.id)
                                             }}
-                                            className="text-xs underline underline-offset-2 shrink-0"
+                                            className="text-xs underline underline-offset-2 shrink-0 cursor-pointer"
                                             style={{ color: 'var(--color-admin-primary)' }}>
                                             {order.admin_note ? '編輯' : '新增'}
                                         </button>

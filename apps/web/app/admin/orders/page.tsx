@@ -161,7 +161,7 @@ export default function OrderHistoryPage() {
                         <select
                             value={status}
                             onChange={e => setStatus(e.target.value)}
-                            className="border rounded-lg px-3 py-2 text-sm w-full"
+                            className="border rounded-lg px-3 py-2 text-sm w-full cursor-pointer"
                             style={css.surface}
                         >
                             <option value="">所有狀態</option>
@@ -202,7 +202,7 @@ export default function OrderHistoryPage() {
                         <select
                             value={sessionId}
                             onChange={e => setSessionId(e.target.value)}
-                            className="border rounded-lg px-3 py-2 text-sm w-full"
+                            className="border rounded-lg px-3 py-2 text-sm w-full cursor-pointer"
                             style={css.surface}
                         >
                             <option value="">所有開單</option>
@@ -218,7 +218,7 @@ export default function OrderHistoryPage() {
                             value={productId}
                             onChange={e => setProductId(e.target.value)}
                             disabled={!sessionId}
-                            className="border rounded-lg px-3 py-2 text-sm w-full disabled:opacity-40"
+                            className="border rounded-lg px-3 py-2 text-sm w-full disabled:opacity-40 cursor-pointer"
                             style={css.surface}
                         >
                             <option value="">所有商品</option>
@@ -233,7 +233,7 @@ export default function OrderHistoryPage() {
                     <button
                         onClick={handleExport}
                         disabled={!searched || loading}
-                        className="px-4 py-2 rounded-lg text-sm border disabled:opacity-40"
+                        className="px-4 py-2 rounded-lg text-sm border disabled:opacity-40 cursor-pointer"
                         style={css.surface}
                     >
                         <span style={css.muted}>匯出 CSV</span>
@@ -241,7 +241,7 @@ export default function OrderHistoryPage() {
                     <button
                         onClick={handleSearch}
                         disabled={loading}
-                        className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+                        className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
                         style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
                         {loading ? '查詢中...' : '查詢'}

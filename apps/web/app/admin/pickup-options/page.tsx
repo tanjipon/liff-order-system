@@ -88,7 +88,7 @@ export default function PickupOptionsPage() {
                 </div>
                 <Link
                     href="/admin/pickup-options/new"
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white cursor-pointer"
                     style={{ backgroundColor: 'var(--color-admin-primary)' }}
                 >
                     新增取貨方式
@@ -136,10 +136,10 @@ export default function PickupOptionsPage() {
                                     </label>
                                     <div className="flex gap-2">
                                         <button type="submit"
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
                                             style={{ backgroundColor: 'var(--color-admin-primary)' }}>儲存</button>
                                         <button type="button" onClick={() => setEditState(null)}
-                                            className="px-3 py-1.5 rounded-lg text-xs border"
+                                            className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
                                             style={css.surface}>
                                             <span style={css.muted}>取消</span>
                                         </button>
@@ -179,13 +179,13 @@ export default function PickupOptionsPage() {
                                                 extraFee: String(opt.extra_fee),
                                                 bankOnly: opt.allowed_payment_methods !== null,
                                             })}
-                                            className="px-3 py-1.5 rounded-lg text-xs border"
+                                            className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
                                             style={css.surface}>
                                             <span style={css.muted}>編輯</span>
                                         </button>
                                         <button
                                             onClick={() => handleToggle(opt.id)}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                                             style={opt.is_active
                                                 ? { backgroundColor: '#FEE2E2', color: '#991B1B' }
                                                 : { backgroundColor: '#DCFCE7', color: '#166534' }
