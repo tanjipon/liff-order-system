@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
+import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 
 type Session = {
@@ -70,6 +71,7 @@ export default function SessionsPage() {
     }, [])
 
     if (isLoading) return <LiffLoader />
+    if (error) return <LiffError error={error} />
 
     return (
         <div className={S.outer} style={css.bg}>
@@ -90,14 +92,7 @@ export default function SessionsPage() {
                     </button>
                 </div>
 
-                {error && (
-                    <div className="rounded-2xl p-4 text-sm text-center"
-                        style={{ backgroundColor: '#FFE8ED', color: '#C0392B' }}>
-                        {error}
-                    </div>
-                )}
-
-                {!error && sessions.length === 0 && (
+                {sessions.length === 0 && (
                     <div className="p-8 text-center">
                         <p className="text-sm" style={css.muted}>目前沒有開放中的訂單</p>
                     </div>

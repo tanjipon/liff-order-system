@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
+import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 
 type Product = {
@@ -170,11 +171,7 @@ export default function OrderPage() {
     ) ?? 0
 
     if (isLoading) return <LiffLoader />
-    if (error) return (
-        <div className="min-h-screen flex items-center justify-center p-4" style={css.bg}>
-            <p className="text-sm text-center" style={{ color: '#C0392B' }}>{error}</p>
-        </div>
-    )
+    if (error && !orderId) return <LiffError error={error} backHref="/liff/sessions" />
     if (!session) return null
 
     // ── 訂單送出成功 ──────────────────────────────────────────

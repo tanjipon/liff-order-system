@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
+import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 
 type OrderItem = {
@@ -79,11 +80,7 @@ export default function StatusPage() {
 
     if (isLoading) return <LiffLoader />
 
-    if (error) return (
-        <div className="min-h-screen w-full flex items-center justify-center p-4" style={css.bg}>
-            <p className="text-sm text-center" style={{ color: '#C0392B' }}>{error}</p>
-        </div>
-    )
+    if (error) return <LiffError error={error} backHref="/liff/sessions" />
 
     if (orders.length === 0) return (
         <div className="min-h-screen w-full flex flex-col items-center justify-center p-4" style={css.bg}>
