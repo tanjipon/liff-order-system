@@ -85,7 +85,14 @@ export default function StatusPage() {
     if (orders.length === 0) return (
         <div className="min-h-screen w-full flex flex-col items-center justify-center p-4" style={css.bg}>
             <p className="text-4xl mb-4">🛍️</p>
-            <p className="text-sm" style={css.muted}>目前沒有訂單紀錄</p>
+            <p className="text-sm mb-6" style={css.muted}>目前沒有訂單紀錄</p>
+            <button
+                onClick={() => router.push('/liff/sessions')}
+                className="text-sm px-4 py-2 rounded-xl border"
+                style={css.surface}
+            >
+                <span style={css.muted}>← 前往訂購</span>
+            </button>
         </div>
     )
 
