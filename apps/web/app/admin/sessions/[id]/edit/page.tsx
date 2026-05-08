@@ -20,8 +20,10 @@ export default function EditSessionPage() {
     const [opensAt, setOpensAt] = useState('')
     const [closesAt, setClosesAt] = useState('')
     const [perPersonLimit, setPerPersonLimit] = useState('')
+    const [isActive, setIsActive] = useState(false)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [toggling, setToggling] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
@@ -33,9 +35,23 @@ export default function EditSessionPage() {
                 setOpensAt(s.opens_at ? toDatetimeLocal(s.opens_at) : '')
                 setClosesAt(s.closes_at ? toDatetimeLocal(s.closes_at) : '')
                 setPerPersonLimit(s.per_person_limit ? String(s.per_person_limit) : '')
+                setIsActive(s.is_active)
             })
             .finally(() => setLoading(false))
     }, [])
+
+    async function handleToggle() {
+        setToggling(true)
+        try {
+            await adminFetch(`/api/admin/sessions/${id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ isActive: !isActive }),
+            })
+            setIsActive(prev => !prev)
+        } finally {
+            setToggling(false)
+        }
+    }
 
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault()
@@ -136,6 +152,34 @@ export default function EditSessionPage() {
                         {saving ? '儲存中...' : '儲存'}
                     </button>
                 </form>
+            </div>
+
+            {/* 啟用 / 停用 */}
+            <div className="rounded-xl border p-5 mt-4" style={css.surface}>
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <p className="text-sm font-semibold" style={css.text}>
+                            開單狀態：
+                            <span className="ml-1.5 font-semibold"
+                                style={{ color: isActive ? '#16A34A' : '#6B7280' }}>
+                                {isActive ? '啟用中' : '已停用'}
+                            </span>
+                        </p>
+                        <p className="text-xs mt-0.5" style={css.muted}>
+                            {isActive ? '客戶目前可以看到此開單並下訂單' : '客戶目前無法看到此開單'}
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleToggle}
+                        disabled={toggling}
+                        className="px-4 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 shrink-0"
+                        style={isActive
+                            ? { backgroundColor: '#FEE2E2', color: '#991B1B' }
+                            : { backgroundColor: '#DCFCE7', color: '#166534' }}
+                    >
+                        {toggling ? '處理中...' : isActive ? '停用' : '啟用'}
+                    </button>
+                </div>
             </div>
         </div>
     )
