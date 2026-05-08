@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { MdLock, MdBlock, MdWarning } from 'react-icons/md'
 
 export default function AdminError({ error, onRetry }: { error: string; onRetry?: () => void }) {
     const router = useRouter()
@@ -23,7 +24,9 @@ export default function AdminError({ error, onRetry }: { error: string; onRetry?
 
                 {isUnauthorized ? (
                     <>
-                        <div className="text-4xl">🔒</div>
+                        <div className="flex justify-center">
+                            <MdLock className="w-12 h-12" style={{ color: 'var(--color-admin-muted)' }} />
+                        </div>
                         <h2 className="text-base font-semibold" style={{ color: 'var(--color-admin-text)' }}>
                             請重新登入
                         </h2>
@@ -35,14 +38,16 @@ export default function AdminError({ error, onRetry }: { error: string; onRetry?
                         </p>
                         <button
                             onClick={() => router.push('/admin/login')}
-                            className="w-full py-2 rounded-lg text-sm font-semibold text-white"
+                            className="w-full py-2 rounded-lg text-sm font-semibold text-white cursor-pointer"
                             style={{ backgroundColor: 'var(--color-admin-primary)' }}>
                             立即前往登入
                         </button>
                     </>
                 ) : isForbidden ? (
                     <>
-                        <div className="text-4xl">🚫</div>
+                        <div className="flex justify-center">
+                            <MdBlock className="w-12 h-12" style={{ color: 'var(--color-admin-muted)' }} />
+                        </div>
                         <h2 className="text-base font-semibold" style={{ color: 'var(--color-admin-text)' }}>
                             權限不足
                         </h2>
@@ -51,14 +56,16 @@ export default function AdminError({ error, onRetry }: { error: string; onRetry?
                         </p>
                         <button
                             onClick={() => router.back()}
-                            className="w-full py-2 rounded-lg text-sm border"
+                            className="w-full py-2 rounded-lg text-sm border cursor-pointer"
                             style={{ borderColor: 'var(--color-admin-border)', color: 'var(--color-admin-muted)' }}>
                             返回
                         </button>
                     </>
                 ) : (
                     <>
-                        <div className="text-4xl">⚠️</div>
+                        <div className="flex justify-center">
+                            <MdWarning className="w-12 h-12" style={{ color: 'var(--color-admin-muted)' }} />
+                        </div>
                         <h2 className="text-base font-semibold" style={{ color: 'var(--color-admin-text)' }}>
                             發生錯誤
                         </h2>
@@ -74,7 +81,7 @@ export default function AdminError({ error, onRetry }: { error: string; onRetry?
                             )}
                             <button
                                 onClick={() => router.back()}
-                                className="flex-1 py-2 rounded-lg text-sm border"
+                                className="flex-1 py-2 rounded-lg text-sm border cursor-pointer"
                                 style={{ borderColor: 'var(--color-admin-border)', color: 'var(--color-admin-muted)' }}>
                                 返回
                             </button>

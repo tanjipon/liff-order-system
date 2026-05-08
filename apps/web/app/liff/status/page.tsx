@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
+import { ShoppingBag } from 'lucide-react'
 
 type OrderItem = {
     quantity: number
@@ -84,7 +85,7 @@ export default function StatusPage() {
 
     if (orders.length === 0) return (
         <div className="min-h-screen w-full flex flex-col items-center justify-center p-4" style={css.bg}>
-            <p className="text-4xl mb-4">🛍️</p>
+            <ShoppingBag className="w-12 h-12 mb-4" style={{ color: 'var(--color-liff-muted)' }} />
             <p className="text-sm mb-6" style={css.muted}>目前沒有訂單紀錄</p>
             <button
                 onClick={() => router.push('/liff/sessions')}

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
+import { Clock, CheckCircle } from 'lucide-react'
 
 type OrderItem = {
     quantity: number
@@ -253,7 +254,10 @@ export default function OrderDetailPage() {
                                 <p className="text-xs" style={css.muted}>等待店家確認中，請耐心等候</p>
                             )}
                             {order.status === 'in_production' && (
-                                <p className="text-xs" style={{ color: '#1D4ED8' }}>店家已接單，正在為您製作 🍰</p>
+                                <p className="text-xs flex items-center gap-1" style={{ color: '#1D4ED8' }}>
+                                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                                    店家已接單，正在為您製作
+                                </p>
                             )}
                             {order.status === 'payment_submitted' && order.remit_last5 && (
                                 <p className="text-xs" style={{ color: '#6D28D9' }}>
@@ -261,7 +265,10 @@ export default function OrderDetailPage() {
                                 </p>
                             )}
                             {order.status === 'completed' && (
-                                <p className="text-xs" style={{ color: '#065F46' }}>感謝您的購買！🎉</p>
+                                <p className="text-xs flex items-center gap-1" style={{ color: '#065F46' }}>
+                                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                                    感謝您的購買！
+                                </p>
                             )}
                         </div>
                     </div>

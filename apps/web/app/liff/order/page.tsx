@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
+import { CheckCircle } from 'lucide-react'
 
 type Product = {
     id: string
@@ -177,7 +178,7 @@ export default function OrderPage() {
     // ── 訂單送出成功 ──────────────────────────────────────────
     if (orderId) return (
         <div className="min-h-screen flex flex-col items-center justify-center p-4" style={css.bg}>
-            <div className="text-5xl mb-4">🎉</div>
+            <CheckCircle className="w-16 h-16 mb-4" style={{ color: 'var(--color-liff-primary)' }} />
             <h2 className="text-xl font-bold mb-2" style={css.text}>訂單已送出！</h2>
             {orderNumber && (
                 <>
