@@ -12,6 +12,7 @@ const NAV_ITEMS = [
     { href: '/admin/pickup-options', label: '取貨方式' },
     { href: '/admin/staff', label: '人員管理' },
     { href: '/admin/roles', label: '角色權限' },
+    { href: '/admin/images', label: '圖庫管理' },
     { href: '/admin/settings', label: '系統設定' },
 ]
 
