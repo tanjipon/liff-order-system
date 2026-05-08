@@ -5,8 +5,10 @@ import { useParams } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
 import AdminError from '@/components/admin/AdminError'
+import ImageCropper from '@/components/admin/ImageCropper'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import Link from 'next/link'
+import Image from 'next/image'
 
 type Product = {
     id: string
@@ -14,6 +16,7 @@ type Product = {
     price: number
     stock_qty: number
     max_per_person: number | null
+    image_url: string | null
 }
 
 type RestockItem = {
@@ -68,6 +71,9 @@ export default function SessionDetailPage() {
         stockQty: string
         maxPerPerson: string
     } | null>(null)
+
+    const [imageUploadProductId, setImageUploadProductId] = useState<string | null>(null)
+    const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
     const [restocks, setRestocks] = useState<Restock[]>([])
     const [restockOpensAt, setRestockOpensAt] = useState('')
@@ -163,6 +169,15 @@ export default function SessionDetailPage() {
         loadRestocks()
     }
 
+    async function handleImageDone(productId: string, publicUrl: string) {
+        await adminFetch(`/api/admin/products/${productId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ imageUrl: publicUrl }),
+        })
+        setImageUploadProductId(null)
+        loadSession()
+    }
+
     async function handleDelete(productId: string) {
         if (!confirm('確定要刪除這個商品？')) return
         await adminFetch(`/api/admin/sessions/${id}/products/${productId}`, { method: 'DELETE' })
@@ -195,7 +210,17 @@ export default function SessionDetailPage() {
     if (!session) return null
 
     return (
+        <>
         <div className="p-6 max-w-3xl mx-auto space-y-8">
+
+            {/* 頁首 */}
+            <div className="flex items-center gap-3 mb-2">
+                <Link href="/admin/sessions"
+                    className="text-sm px-3 py-1.5 rounded-lg border"
+                    style={css.surface}>
+                    <span style={css.muted}>← 返回</span>
+                </Link>
+            </div>
 
             {/* 開單資訊 */}
             <div className="rounded-xl border p-5" style={css.surface}>
@@ -302,32 +327,65 @@ export default function SessionDetailPage() {
                                         </div>
                                     </form>
                                 ) : (
-                                    <div className="flex justify-between items-center gap-3">
-                                        <div className="min-w-0">
-                                            <p className="font-semibold text-sm" style={css.text}>{p.name}</p>
-                                            <p className="text-xs mt-0.5" style={css.muted}>
-                                                NT$ {p.price}・庫存 {p.stock_qty}
-                                                {p.max_per_person ? `・每人限購 ${p.max_per_person} 件` : ''}
-                                            </p>
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                {p.image_url ? (
+                                                    <button onClick={() => setLightboxUrl(p.image_url)} className="shrink-0">
+                                                        <Image
+                                                            src={p.image_url}
+                                                            alt={p.name}
+                                                            width={56}
+                                                            height={42}
+                                                            className="rounded-lg object-cover hover:opacity-80 transition-opacity"
+                                                        />
+                                                    </button>
+                                                ) : (
+                                                    <div className="w-14 h-[42px] rounded-lg shrink-0 flex items-center justify-center border"
+                                                        style={css.surface}>
+                                                        <span className="text-xs" style={css.muted}>無圖</span>
+                                                    </div>
+                                                )}
+                                                <div className="min-w-0">
+                                                    <p className="font-semibold text-sm" style={css.text}>{p.name}</p>
+                                                    <p className="text-xs mt-0.5" style={css.muted}>
+                                                        NT$ {p.price}・庫存 {p.stock_qty}
+                                                        {p.max_per_person ? `・每人限購 ${p.max_per_person} 件` : ''}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2 shrink-0">
+                                                <button
+                                                    onClick={() => setImageUploadProductId(imageUploadProductId === p.id ? null : p.id)}
+                                                    className="px-3 py-1.5 rounded-lg text-xs border"
+                                                    style={css.surface}>
+                                                    <span style={css.muted}>{p.image_url ? '換圖' : '上傳圖片'}</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditState({
+                                                        productId: p.id,
+                                                        name: p.name,
+                                                        price: String(p.price),
+                                                        stockQty: String(p.stock_qty),
+                                                        maxPerPerson: p.max_per_person ? String(p.max_per_person) : ''
+                                                    })}
+                                                    className="px-3 py-1.5 rounded-lg text-xs border"
+                                                    style={css.surface}>
+                                                    <span style={css.muted}>編輯</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(p.id)}
+                                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                                                    style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>刪除</button>
+                                            </div>
                                         </div>
-                                        <div className="flex gap-2 shrink-0">
-                                            <button
-                                                onClick={() => setEditState({
-                                                    productId: p.id,
-                                                    name: p.name,
-                                                    price: String(p.price),
-                                                    stockQty: String(p.stock_qty),
-                                                    maxPerPerson: p.max_per_person ? String(p.max_per_person) : ''
-                                                })}
-                                                className="px-3 py-1.5 rounded-lg text-xs border"
-                                                style={css.surface}>
-                                                <span style={css.muted}>編輯</span>
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(p.id)}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                                                style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>刪除</button>
-                                        </div>
+                                        {imageUploadProductId === p.id && (
+                                            <ImageCropper
+                                                productId={p.id}
+                                                onDone={(url) => handleImageDone(p.id, url)}
+                                                onCancel={() => setImageUploadProductId(null)}
+                                            />
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -501,5 +559,30 @@ export default function SessionDetailPage() {
             </div>
 
         </div>
+
+        {/* Lightbox */}
+        {lightboxUrl && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}
+                    onClick={() => setLightboxUrl(null)}
+                >
+                    <button
+                        onClick={() => setLightboxUrl(null)}
+                        className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
+                    >✕</button>
+                    <div className="max-w-2xl w-full" onClick={e => e.stopPropagation()}>
+                        <Image
+                            src={lightboxUrl!}
+                            alt="商品圖片"
+                            width={800}
+                            height={600}
+                            className="rounded-xl w-full h-auto"
+                        />
+                    </div>
+                </div>
+            )}
+        </>
     )
 }
