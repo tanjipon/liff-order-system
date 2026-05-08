@@ -179,7 +179,7 @@ export default function OrderPage() {
     if (orderId) return (
         <div className="min-h-screen flex flex-col items-center justify-center p-4" style={css.bg}>
             <CheckCircle className="w-16 h-16 mb-4" style={{ color: 'var(--color-liff-primary)' }} />
-            <h2 className="text-xl font-bold mb-2" style={css.text}>訂單已送出！</h2>
+            <h2 className="text-xl font-bold mb-2" style={css.text}>訂單已送出</h2>
             {orderNumber && (
                 <>
                     <p className="text-sm mb-1" style={css.muted}>訂單單號</p>
