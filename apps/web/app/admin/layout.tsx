@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { adminFetch } from '@/lib/auth/adminClient'
 
 const NAV_ITEMS = [
     { href: '/admin', label: '訂單管理' },
@@ -10,10 +12,20 @@ const NAV_ITEMS = [
     { href: '/admin/pickup-options', label: '取貨方式' },
     { href: '/admin/staff', label: '人員管理' },
     { href: '/admin/roles', label: '角色權限' },
+    { href: '/admin/settings', label: '系統設定' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
+    const [shopName, setShopName] = useState('後台管理系統')
+
+    useEffect(() => {
+        if (pathname === '/admin/login') return
+        adminFetch('/api/admin/settings')
+            .then(r => r.json())
+            .then(body => { if (body.data?.shop_name) setShopName(body.data.shop_name) })
+            .catch(() => {})
+    }, [pathname])
 
     // login do not use layout
     if (pathname === '/admin/login') return <>{children}</>
@@ -50,7 +62,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 style={{ backgroundColor: 'var(--color-admin-surface)', borderColor: 'var(--color-admin-border)' }}>
                 <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--color-admin-border)' }}>
                     <p className="font-semibold text-sm" style={{ color: 'var(--color-admin-text)' }}>
-                        甜點工作室
+                        {shopName}
                     </p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--color-admin-muted)' }}>
                         後台管理系統
