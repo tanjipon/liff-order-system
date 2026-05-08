@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { siteConfig } from "@/config/site";
 
 export const metadata: Metadata = {
-  title: "LIFF Order System",
-  description: "An app for ordering.",
+  title: siteConfig.name,
+  description: siteConfig.description,
 };
 
 export default function RootLayout({
