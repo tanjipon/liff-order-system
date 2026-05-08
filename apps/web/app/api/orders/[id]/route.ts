@@ -1,8 +1,49 @@
 import { NextRequest } from 'next/server'
 import { verifyLiffToken } from '@/lib/auth/verifyLiff'
 import { errorResponse } from '@/lib/api/response'
-import { assertCancellable } from '@/lib/orderStatus'
 import { getSupabaseAdmin } from '@/lib/supabase/server'
+
+export async function GET(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const { id } = await params
+        const profile = await verifyLiffToken(req)
+        const supabase = getSupabaseAdmin()
+
+        const { data: order, error } = await supabase
+            .from('orders')
+            .select(`
+                id,
+                order_number,
+                status,
+                payment_method,
+                total_amount,
+                pickup_fee,
+                remit_last5,
+                queue_number,
+                created_at,
+                customer_note,
+                sessions ( title ),
+                order_items (
+                    quantity,
+                    unit_price,
+                    product_id,
+                    products ( name )
+                )
+            `)
+            .eq('id', id)
+            .eq('line_user_id', profile.userId)
+            .single()
+
+        if (error || !order) return errorResponse('ORDER_NOT_FOUND', 404)
+
+        return Response.json({ data: order })
+    } catch (e: any) {
+        return errorResponse(e.message)
+    }
+}
 
 export async function PUT (
     req: NextRequest,

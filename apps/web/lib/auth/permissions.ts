@@ -11,3 +11,4 @@ export type Permission =
     | 'roles:manage'
     | 'pickup_options:manage'
     | 'restocks:manage'
+    | 'orders:note'

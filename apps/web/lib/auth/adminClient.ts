@@ -16,7 +16,7 @@ export async function getAdminToken(): Promise<string> {
 
 export async function adminFetch(url: string, options: RequestInit = {}) {
     const token = await getAdminToken()
-    return fetch(url, {
+    const res = await fetch(url, {
         ...options,
         headers: {
             'Content-Type': 'application/json',
@@ -24,4 +24,7 @@ export async function adminFetch(url: string, options: RequestInit = {}) {
             ...options.headers,
         },
     })
+    if (res.status === 401) throw new Error('UNAUTHORIZED')
+    if (res.status === 403) throw new Error('FORBIDDEN')
+    return res
 }

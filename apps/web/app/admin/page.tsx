@@ -1,24 +1,34 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { adminFetch } from '@/lib/auth/adminClient'
-import Link from 'next/link'
+import AdminSpinner from '@/components/admin/AdminSpinner'
+import AdminError from '@/components/admin/AdminError'
+import { useMinLoading } from '@/hooks/useMinLoading'
+import Pagination from '@/components/admin/Pagination'
 
 type Order = {
     id: string
     status: string
+    session_id: string
     line_display_name: string
     total_amount: number
     queue_number: number | null
     payment_method: string
     remit_last5: string | null
     created_at: string
+    customer_note: string | null
+    admin_note: string | null
     order_items: {
+        product_id: string
         quantity: number
         unit_price: number
         products: { name: string }
     }[]
 }
+
+type Session = { id: string; title: string }
+type Product = { id: string; name: string }
 
 const STATUS_LABEL: Record<string, string> = {
     pending: '待確認',
@@ -27,16 +37,29 @@ const STATUS_LABEL: Record<string, string> = {
     payment_submitted: '付款確認中',
 }
 
-const STATUS_COLOR: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-700',
-    in_production: 'bg-blue-100 text-blue-700',
-    pending_payment: 'bg-orange-100 text-orange-700',
-    payment_submitted: 'bg-purple-100 text-purple-700',
+const STATUS_STYLE: Record<string, { backgroundColor: string; color: string }> = {
+    pending: { backgroundColor: '#FEF9C3', color: '#854D0E' },
+    in_production: { backgroundColor: '#DBEAFE', color: '#1E40AF' },
+    pending_payment: { backgroundColor: '#FFEDD5', color: '#9A3412' },
+    payment_submitted: { backgroundColor: '#EDE9FE', color: '#5B21B6' },
 }
+
+const css = {
+    surface: { backgroundColor: 'var(--color-admin-surface)', borderColor: 'var(--color-admin-border)' },
+    text: { color: 'var(--color-admin-text)' },
+    muted: { color: 'var(--color-admin-muted)' },
+    primary: { backgroundColor: 'var(--color-admin-primary)', color: '#fff' },
+    border: { borderColor: 'var(--color-admin-border)' },
+} as const
+
+const PAGE_LIMIT = 20
 
 export default function AdminDashBoard() {
     const [orders, setOrders] = useState<Order[]>([])
-    const [loading, setLoading] = useState(true)
+    const [total, setTotal] = useState(0)
+    const [totalPages, setTotalPages] = useState(0)
+    const [dataLoaded, setDataLoaded] = useState(false)
+    const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     const [actionState, setActionState] = useState<{
@@ -44,155 +67,352 @@ export default function AdminDashBoard() {
         action: 'reject' | 'cancel'
         reason: string
     } | null>(null)
+    const [adminNoteInputs, setAdminNoteInputs] = useState<Record<string, string>>({})
+    const [adminNoteEditing, setAdminNoteEditing] = useState<string | null>(null)
+    const [adminNoteSaving, setAdminNoteSaving] = useState<string | null>(null)
 
-    async function loadOrders() {
+    const [filterStatus, setFilterStatus] = useState('')
+    const [filterSessionId, setFilterSessionId] = useState('')
+    const [filterProductId, setFilterProductId] = useState('')
+    const [sessions, setSessions] = useState<Session[]>([])
+    const [products, setProducts] = useState<Product[]>([])
+    const [page, setPage] = useState(1)
+
+    const { combine } = useMinLoading(1000)
+    const isLoading = combine(dataLoaded)
+
+    const fetchOrders = useCallback(async (p: number, scroll = false) => {
+        setLoading(true)
+        setError(null)
         try {
-            const res = await adminFetch('/api/admin/orders')
+            const params = new URLSearchParams({ page: String(p), limit: String(PAGE_LIMIT) })
+            if (filterStatus) params.set('status', filterStatus)
+            if (filterSessionId) params.set('sessionId', filterSessionId)
+            if (filterProductId) params.set('productId', filterProductId)
+
+            const res = await adminFetch(`/api/admin/orders?${params}`)
             const body = await res.json()
-            if (body.data) setOrders(body.data)
-            else setError(body.message ?? '載入失敗')
-        } catch {
-            setError('載入失敗')
+            if (body.data) {
+                setOrders(body.data)
+                setTotal(body.total ?? 0)
+                setTotalPages(body.totalPages ?? 0)
+                const notes: Record<string, string> = {}
+                body.data.forEach((o: Order) => { notes[o.id] = o.admin_note ?? '' })
+                setAdminNoteInputs(notes)
+                if (scroll) {
+                    requestAnimationFrame(() => {
+                        document.getElementById('admin-main')?.scrollTo({ top: 0, behavior: 'smooth' })
+                        window.scrollTo({ top: 0, behavior: 'smooth' })
+                    })
+                }
+            } else {
+                setError(body.message ?? '載入失敗')
+            }
+        } catch (e: any) {
+            setError(e.message ?? '載入失敗')
         } finally {
             setLoading(false)
+            setDataLoaded(true)
+        }
+    }, [filterStatus, filterSessionId, filterProductId])
+
+    // 初次載入
+    useEffect(() => {
+        fetchOrders(1)
+        adminFetch('/api/admin/sessions')
+            .then(r => r.json())
+            .then(body => setSessions(body.data ?? []))
+    }, [])
+
+    // filter 改變時重設到第 1 頁並重新 fetch
+    useEffect(() => {
+        setPage(1)
+        fetchOrders(1)
+    }, [filterStatus, filterSessionId, filterProductId])
+
+    // 選 session 後載入商品
+    useEffect(() => {
+        setFilterProductId('')
+        setProducts([])
+        if (!filterSessionId) return
+        adminFetch(`/api/admin/sessions/${filterSessionId}`)
+            .then(r => r.json())
+            .then(body => setProducts(body.data?.products ?? []))
+    }, [filterSessionId])
+
+    async function saveAdminNote(orderId: string) {
+        setAdminNoteSaving(orderId)
+        try {
+            await adminFetch(`/api/admin/orders/${orderId}/note`, {
+                method: 'PATCH',
+                body: JSON.stringify({ note: adminNoteInputs[orderId]?.trim() || null })
+            })
+            setOrders(prev => prev.map(o =>
+                o.id === orderId ? { ...o, admin_note: adminNoteInputs[orderId]?.trim() || null } : o
+            ))
+            setAdminNoteEditing(null)
+        } finally {
+            setAdminNoteSaving(null)
         }
     }
-
-    useEffect(() => { loadOrders() }, [])
 
     async function handleAction(orderId: string, action: string, body?: object) {
         await adminFetch(`/api/admin/orders/${orderId}/${action}`, {
             method: 'PATCH',
             body: body ? JSON.stringify(body) : undefined
         })
-        loadOrders() // reload
+        fetchOrders(page)
     }
 
-    if (loading) return <div className="p-6">載入中...</div>
-    if (error) return <div className="p-6 text-red-500">{error}</div>
+    function handlePageChange(p: number) {
+        setPage(p)
+        fetchOrders(p, true)
+    }
 
-    const activeOrders = orders.filter(o =>
-        ['pending', 'in_production', 'pending_payment', 'payment_submitted'].includes(o.status)
-    )
+    const hasFilter = filterStatus || filterSessionId || filterProductId
+
+    if (isLoading) return <AdminSpinner />
+    if (error) return <AdminError error={error} onRetry={() => fetchOrders(page)} />
 
     return (
-        <div className="p-6 max-w-4xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">訂單管理</h1>
-                <div className="flex gap-2">
-                    <Link href="/admin/sessions" className="text-sm text-gray-500 border rounded px-3 py-1">
-                        開單管理
-                    </Link>
-                    <Link href="/admin/pickup-options" className="text-sm text-gray-500 border rounded px-3 py-1">
-                        取貨方式
-                    </Link>
-                    <Link href="/admin/orders" className="text-sm text-gray-500 border rounded px-3 py-1">
-                        歷史訂單
-                    </Link>
-                    <Link href="/admin/staff" className="text-sm text-gray-500 border rounded px-3 py-1">
-                        人員管理
-                    </Link>
-                    <button onClick={loadOrders} className="text-sm text-gray-500 border rounded px-3 py-1">
-                        重新整理
-                    </button>
+        <div className="p-6 max-w-3xl mx-auto" style={{ minHeight: '100vh' }}>
+
+            {/* 頁首 */}
+            <div className="flex justify-between items-center mb-4">
+                <div>
+                    <h1 className="text-xl font-semibold" style={css.text}>訂單管理</h1>
+                    <p className="text-sm mt-0.5" style={css.muted}>
+                        {total} 筆{hasFilter ? '（篩選結果）' : '進行中'}
+                    </p>
                 </div>
+                <button
+                    onClick={() => fetchOrders(page)}
+                    disabled={loading}
+                    className="text-sm px-4 py-2 rounded-lg border cursor-pointer disabled:opacity-50"
+                    style={css.surface}
+                >
+                    <span style={css.muted}>重新整理</span>
+                </button>
             </div>
 
-            {activeOrders.length === 0 && (
-                <p className="text-gray-400 text-center py-12">目前沒有進行中的訂單</p>
-            )}
+            {/* 篩選列 */}
+            <div className="rounded-xl border p-3 mb-4 space-y-2" style={css.surface}>
+                <div className="flex flex-col md:flex-row gap-2">
+                    <select
+                        value={filterStatus}
+                        onChange={e => setFilterStatus(e.target.value)}
+                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full cursor-pointer"
+                        style={css.surface}
+                    >
+                        <option value="">所有狀態</option>
+                        {Object.entries(STATUS_LABEL).map(([v, l]) => (
+                            <option key={v} value={v}>{l}</option>
+                        ))}
+                    </select>
 
-            <div className="space-y-4">
-                {activeOrders.map(order => (
-                    <div key={order.id} className="border rounded-lg p-4 space-y-3">
+                    <select
+                        value={filterSessionId}
+                        onChange={e => setFilterSessionId(e.target.value)}
+                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full cursor-pointer"
+                        style={css.surface}
+                    >
+                        <option value="">所有開單</option>
+                        {sessions.map(s => (
+                            <option key={s.id} value={s.id}>{s.title}</option>
+                        ))}
+                    </select>
 
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <span className={`text-xs px-2 py-1 rounded-full ${STATUS_COLOR[order.status]}`}>
-                                    {STATUS_LABEL[order.status]}
-                                </span>
-                                {order.queue_number && (
-                                    <span className="ml-2 text-sm text-gray-500">#{order.queue_number}</span>
+                    <select
+                        value={filterProductId}
+                        onChange={e => setFilterProductId(e.target.value)}
+                        disabled={!filterSessionId}
+                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full disabled:opacity-40 cursor-pointer"
+                        style={css.surface}
+                    >
+                        <option value="">所有商品</option>
+                        {products.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                {hasFilter && (
+                    <button
+                        onClick={() => { setFilterStatus(''); setFilterSessionId(''); setFilterProductId('') }}
+                        className="text-xs px-3 py-1 rounded-lg border cursor-pointer"
+                        style={css.surface}
+                    >
+                        <span style={css.muted}>清除篩選</span>
+                    </button>
+                )}
+            </div>
+
+            {orders.length === 0 && !loading ? (
+                <div className="p-12 text-center">
+                    <p className="text-sm" style={css.muted}>
+                        {hasFilter ? '沒有符合篩選條件的訂單' : '目前沒有進行中的訂單'}
+                    </p>
+                </div>
+            ) : (
+                <>
+                <div className="space-y-3">
+                    {orders.map((order) => (
+                        <div key={order.id}
+                            className="rounded-xl border overflow-hidden"
+                            style={css.surface}>
+
+                            {/* 主要資訊列 */}
+                            <div className="p-4 flex flex-wrap md:flex-nowrap items-center gap-3">
+
+                                {/* 狀態 */}
+                                <div className="shrink-0">
+                                    <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
+                                        style={STATUS_STYLE[order.status]}>
+                                        {STATUS_LABEL[order.status]}
+                                    </span>
+                                </div>
+
+                                {/* 客戶 + 品項 */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="font-semibold text-sm" style={css.text}>{order.line_display_name}</p>
+                                        {order.queue_number && (
+                                            <span className="text-xs font-mono font-semibold"
+                                                style={{ color: 'var(--color-admin-primary)' }}>#{order.queue_number}</span>
+                                        )}
+                                        <span className="text-xs" style={css.muted}>
+                                            {new Date(order.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm mt-0.5 truncate" style={css.muted}>
+                                        {order.order_items.map(i => `${i.products.name}×${i.quantity}`).join('、')}
+                                    </p>
+                                    <p className="text-sm font-bold" style={css.text}>NT$ {order.total_amount}</p>
+                                    {order.payment_method === 'bank_transfer' && order.remit_last5 && (
+                                        <span className="text-xs px-2 py-0.5 rounded-full"
+                                            style={{ backgroundColor: '#EDE9FE', color: '#5B21B6' }}>
+                                            後五碼 {order.remit_last5}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* 操作按鈕 */}
+                                <div className="shrink-0 flex gap-3 flex-wrap">
+                                    {order.status === 'pending' && (<>
+                                        <button onClick={() => handleAction(order.id, 'accept')}
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            style={{ backgroundColor: 'var(--color-admin-primary)' }}>接單</button>
+                                        <button onClick={() => setActionState({ orderId: order.id, action: 'reject', reason: '' })}
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                            style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>拒絕</button>
+                                    </>)}
+                                    {order.status === 'in_production' && (<>
+                                        <button onClick={() => handleAction(order.id, 'ready')}
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            style={{ backgroundColor: '#16A34A' }}>製作完成</button>
+                                        <button onClick={() => setActionState({ orderId: order.id, action: 'cancel', reason: '' })}
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                            style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>取消</button>
+                                    </>)}
+                                    {order.status === 'pending_payment' && order.payment_method === 'cash' && (
+                                        <button onClick={() => handleAction(order.id, 'confirm-payment')}
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            style={{ backgroundColor: '#16A34A' }}>確認收現</button>
+                                    )}
+                                    {order.status === 'payment_submitted' && (
+                                        <button onClick={() => handleAction(order.id, 'confirm-payment')}
+                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            style={{ backgroundColor: '#16A34A' }}>確認付款</button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 原因輸入框（獨立一行） */}
+                            {actionState?.orderId === order.id && (
+                                <div className="px-4 pb-4 flex gap-2 items-center">
+                                    <input
+                                        type="text"
+                                        value={actionState.reason}
+                                        onChange={e => setActionState({ ...actionState, reason: e.target.value })}
+                                        placeholder={actionState.action === 'reject' ? '請輸入拒絕原因' : '請輸入取消原因'}
+                                        className="flex-1 border rounded-lg px-3 py-1.5 text-xs"
+                                        style={css.surface}
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            if (!actionState.reason.trim()) return
+                                            handleAction(actionState.orderId, actionState.action, { reason: actionState.reason })
+                                            setActionState(null)
+                                        }}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                        style={{ backgroundColor: '#DC2626' }}>確認</button>
+                                    <button onClick={() => setActionState(null)}
+                                        className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                        style={css.surface}>取消</button>
+                                </div>
+                            )}
+
+                            {/* 備註區 */}
+                            <div className="px-4 pb-4 border-t pt-3 space-y-2" style={css.border}>
+                                {order.customer_note && (
+                                    <p className="text-xs" style={css.muted}>
+                                        <span className="font-semibold">客戶備註：</span>{order.customer_note}
+                                    </p>
+                                )}
+
+                                {adminNoteEditing === order.id ? (
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            type="text"
+                                            value={adminNoteInputs[order.id] ?? ''}
+                                            onChange={e => setAdminNoteInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                            placeholder="店家備註（僅內部可見）"
+                                            className="flex-1 border rounded-lg px-3 py-1.5 text-xs"
+                                            style={css.surface}
+                                            autoFocus
+                                        />
+                                        <button
+                                            onClick={() => saveAdminNote(order.id)}
+                                            disabled={adminNoteSaving === order.id}
+                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0 disabled:opacity-50 cursor-pointer"
+                                            style={css.primary}>
+                                            {adminNoteSaving === order.id ? '儲存中...' : '儲存'}
+                                        </button>
+                                        <button
+                                            onClick={() => setAdminNoteEditing(null)}
+                                            className="px-3 py-1.5 rounded-lg text-xs border shrink-0 cursor-pointer"
+                                            style={css.surface}>取消</button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-between gap-2">
+                                        <p className="text-xs flex-1" style={css.muted}>
+                                            <span className="font-semibold">店家備註：</span>
+                                            {order.admin_note ?? <span className="italic">尚未填寫</span>}
+                                        </p>
+                                        <button
+                                            onClick={() => {
+                                                setAdminNoteInputs(prev => ({ ...prev, [order.id]: order.admin_note ?? '' }))
+                                                setAdminNoteEditing(order.id)
+                                            }}
+                                            className="text-xs underline underline-offset-2 shrink-0 cursor-pointer"
+                                            style={{ color: 'var(--color-admin-primary)' }}>
+                                            {order.admin_note ? '編輯' : '新增'}
+                                        </button>
+                                    </div>
                                 )}
                             </div>
-                            <span className="text-sm text-gray-400">
-                                {new Date(order.created_at).toLocaleTimeString('zh-TW')}
-                            </span>
                         </div>
-
-                        <div>
-                            <p className="font-medium">{order.line_display_name}</p>
-                            <div className="text-sm text-gray-500 space-y-0.5 mt-1">
-                                {order.order_items.map((item, i) => (
-                                    <p key={i}>{item.products.name} × {item.quantity}</p>
-                                ))}
-                            </div>
-                            <p className="font-bold mt-2">NT$ {order.total_amount}</p>
-                            {order.payment_method === 'bank_transfer' && order.remit_last5 && (
-                                <p className="text-sm text-purple-600">匯款後五碼：{order.remit_last5}</p>
-                            )}
-                        </div>
-
-                        {/* 操作按鈕 */}
-                        <div className="flex gap-2 flex-wrap">
-                            {order.status === 'pending' && (<>
-                                <button
-                                    onClick={() => handleAction(order.id, 'accept')}
-                                    className="px-3 py-1 bg-blue-500 text-white rounded text-sm"
-                                >接單</button>
-                                <button
-                                    onClick={() => setActionState({ orderId: order.id, action: 'reject', reason: '' })}
-                                    className="px-3 py-1 bg-red-100 text-red-600 rounded text-sm"
-                                >拒絕</button>
-                            </>)}
-
-                            {order.status === 'in_production' && (<>
-                                <button
-                                    onClick={() => handleAction(order.id, 'ready')}
-                                    className="px-3 py-1 bg-green-500 text-white rounded text-sm"
-                                >製作完成</button>
-                                <button
-                                    onClick={() => setActionState({ orderId: order.id, action: 'cancel', reason: '' })}
-                                    className="px-3 py-1 bg-red-100 text-red-600 rounded text-sm"
-                                >取消</button>
-                            </>)}
-
-                            {order.status === 'payment_submitted' && (
-                                <button
-                                    onClick={() => handleAction(order.id, 'confirm-payment')}
-                                    className="px-3 py-1 bg-green-500 text-white rounded text-sm"
-                                >確認付款</button>
-                            )}
-                        </div>
-
-                        {/* 原因輸入框（inline 展開） */}
-                        {actionState?.orderId === order.id && (
-                            <div className="flex gap-2 items-center mt-2">
-                                <input
-                                    type="text"
-                                    value={actionState.reason}
-                                    onChange={e => setActionState({ ...actionState, reason: e.target.value })}
-                                    placeholder={actionState.action === 'reject' ? '拒絕原因' : '取消原因'}
-                                    className="flex-1 border rounded px-2 py-1 text-sm"
-                                />
-                                <button
-                                    onClick={() => {
-                                        if (!actionState.reason.trim()) return
-                                        handleAction(actionState.orderId, actionState.action, { reason: actionState.reason })
-                                        setActionState(null)
-                                    }}
-                                    className="px-3 py-1 bg-red-500 text-white rounded text-sm"
-                                >確認</button>
-                                <button
-                                    onClick={() => setActionState(null)}
-                                    className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm"
-                                >取消</button>
-                            </div>
-                        )}
-
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+                <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    total={total}
+                    limit={PAGE_LIMIT}
+                    onChange={handlePageChange}
+                />
+                </>
+            )}
         </div>
     )
 }

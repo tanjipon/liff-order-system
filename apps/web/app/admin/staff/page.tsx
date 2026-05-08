@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { adminFetch } from '@/lib/auth/adminClient'
+import AdminSpinner from '@/components/admin/AdminSpinner'
+import AdminError from '@/components/admin/AdminError'
+import { useMinLoading } from '@/hooks/useMinLoading'
 
 type StaffMember = {
     userId: string
@@ -12,10 +15,20 @@ type StaffMember = {
     role: { id: string; name: string }
 }
 
+const css = {
+    surface: { backgroundColor: 'var(--color-admin-surface)', borderColor: 'var(--color-admin-border)' },
+    text: { color: 'var(--color-admin-text)' },
+    muted: { color: 'var(--color-admin-muted)' },
+    border: { borderColor: 'var(--color-admin-border)' },
+} as const
+
 export default function StaffPage() {
     const [staff, setStaff] = useState<StaffMember[]>([])
-    const [loading, setLoading] = useState(true)
+    const [dataLoaded, setDataLoaded] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    const { combine } = useMinLoading(1000)
+    const isLoading = combine(dataLoaded)
 
     async function loadStaff() {
         try {
@@ -26,7 +39,7 @@ export default function StaffPage() {
         } catch {
             setError('載入失敗')
         } finally {
-            setLoading(false)
+            setDataLoaded(true)
         }
     }
 
@@ -48,66 +61,91 @@ export default function StaffPage() {
         alert('邀請信已重新寄出')
     }
 
-    if (loading) return <div className="p-6">載入中...</div>
-    if (error)   return <div className="p-6 text-red-500">{error}</div>
+    if (isLoading) return <AdminSpinner />
+    if (error) return <AdminError error={error} onRetry={loadStaff} />
 
     return (
         <div className="p-6 max-w-3xl mx-auto">
+
+            {/* 頁首 */}
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">人員管理</h1>
+                <div>
+                    <h1 className="text-xl font-semibold" style={css.text}>人員管理</h1>
+                    <p className="text-sm mt-0.5" style={css.muted}>{staff.length} 位人員</p>
+                </div>
                 <Link
                     href="/admin/staff/new"
-                    className="px-4 py-2 bg-blue-500 text-white rounded text-sm"
+                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'var(--color-admin-primary)' }}
                 >
                     新增人員
                 </Link>
             </div>
 
-            {staff.length === 0 && (
-                <p className="text-gray-400 text-center py-12">尚無人員資料</p>
-            )}
+            {staff.length === 0 ? (
+                <div className="rounded-xl border p-12 text-center" style={css.surface}>
+                    <p className="text-sm" style={css.muted}>尚無人員資料</p>
+                </div>
+            ) : (
+                <div className="rounded-xl border overflow-hidden" style={css.surface}>
+                    {staff.map((s, idx) => (
+                        <div key={s.userId}
+                            className={`p-4 flex flex-wrap md:flex-nowrap items-center gap-3 ${idx !== 0 ? 'border-t' : ''}`}
+                            style={idx !== 0 ? css.border : {}}>
 
-            <div className="space-y-3">
-                {staff.map(s => (
-                    <div key={s.userId} className="border rounded-lg px-4 py-3 flex justify-between items-center">
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <p className="font-medium">{s.displayName}</p>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${s.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {/* 狀態 badge */}
+                            <div className="shrink-0">
+                                <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
+                                    style={s.isActive
+                                        ? { backgroundColor: '#DCFCE7', color: '#166534' }
+                                        : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                                    }>
                                     {s.isActive ? '啟用中' : '已停用'}
                                 </span>
-                                <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">
-                                    {s.role?.name}
-                                </span>
                             </div>
-                            <p className="text-sm text-gray-400 mt-0.5">{s.email}</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => handleResendInvite(s.userId)}
-                                className="px-3 py-1 bg-gray-100 text-gray-600 rounded text-sm"
-                            >
-                                重送邀請
-                            </button>
-                            {s.isActive ? (
+
+                            {/* 姓名 + email + 角色 */}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-semibold text-sm" style={css.text}>{s.displayName}</p>
+                                    {s.role?.name && (
+                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                            style={{ backgroundColor: '#DBEAFE', color: '#1E40AF' }}>
+                                            {s.role.name}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs mt-0.5 truncate" style={css.muted}>{s.email}</p>
+                            </div>
+
+                            {/* 操作按鈕 */}
+                            <div className="shrink-0 flex gap-2">
                                 <button
-                                    onClick={() => handleDeactivate(s.userId)}
-                                    className="px-3 py-1 bg-red-100 text-red-600 rounded text-sm"
-                                >
-                                    停用
+                                    onClick={() => handleResendInvite(s.userId)}
+                                    className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                    style={css.surface}>
+                                    <span style={css.muted}>重送邀請</span>
                                 </button>
-                            ) : (
-                                <button
-                                    onClick={() => handleActivate(s.userId)}
-                                    className="px-3 py-1 bg-green-100 text-green-700 rounded text-sm"
-                                >
-                                    啟用
-                                </button>
-                            )}
+                                {s.isActive ? (
+                                    <button
+                                        onClick={() => handleDeactivate(s.userId)}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                        style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>
+                                        停用
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => handleActivate(s.userId)}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                        style={{ backgroundColor: '#DCFCE7', color: '#166534' }}>
+                                        啟用
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     )
 }

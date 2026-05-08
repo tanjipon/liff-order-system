@@ -21,7 +21,13 @@ export async function POST(req: NextRequest) {
 
         if (error) throw new Error(error.message)
 
-        return Response.json({ data: { orderId } }, { status: 201 })
+        const { data: order } = await supabase
+            .from('orders')
+            .select('order_number')
+            .eq('id', orderId)
+            .single()
+
+        return Response.json({ data: { orderId, orderNumber: order?.order_number ?? null } }, { status: 201 })
     } catch (e: any) {
         return errorResponse(e.message)
     }
@@ -36,6 +42,7 @@ export async function GET(req: NextRequest) {
             .from('orders')
             .select(`
                 id,
+                order_number,
                 status,
                 payment_method,
                 total_amount,
@@ -43,12 +50,14 @@ export async function GET(req: NextRequest) {
                 remit_last5,
                 queue_number,
                 created_at,
+                customer_note,
+                sessions ( title ),
                 order_items (
                     quantity,
                     unit_price,
                     product_id,
                     products ( name )
-                )    
+                )
             `)
             .eq('line_user_id', profile.userId)
             .order('created_at', { ascending: false })

@@ -4,8 +4,10 @@ import { getSupabaseAdmin } from '@/lib/supabase/server'
 export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin()
     const now = new Date().toISOString()
+    const { searchParams } = new URL(req.url)
+    const sessionId = searchParams.get('sessionId')
 
-    const { data: session, error } = await supabase
+    let query = supabase
         .from('sessions')
         .select(`
             id,
@@ -24,9 +26,14 @@ export async function GET(req: NextRequest) {
         .eq('is_active', true)
         .or(`opens_at.is.null,opens_at.lte.${now}`)
         .or(`closes_at.is.null,closes_at.gte.${now}`)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+
+    if (sessionId) {
+        query = query.eq('id', sessionId)
+    } else {
+        query = query.order('created_at', { ascending: false }).limit(1)
+    }
+
+    const { data: session, error } = await query.single()
 
     if (error || !session) {
         return Response.json({ error: 'SESSION_NOT_ACTIVE' }, { status: 404 })
