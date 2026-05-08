@@ -6,6 +6,7 @@ import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import { CheckCircle } from 'lucide-react'
+import ProductGallery from '@/components/liff/ProductGallery'
 
 type Product = {
     id: string
@@ -13,6 +14,7 @@ type Product = {
     price: number
     stock_qty: number
     max_per_person: number | null
+    image_url: string | null
 }
 
 type Session = {
@@ -238,6 +240,8 @@ export default function OrderPage() {
                     </button>
                 )}
                 <h1 className={S.title} style={css.text}>{session.title}</h1>
+
+                <ProductGallery products={session.products} />
 
                 {/* opens_at 倒數 */}
                 {notOpenYet && (
