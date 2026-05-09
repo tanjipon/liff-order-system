@@ -27,8 +27,9 @@ async function getCroppedWebp(imageSrc: string, cropPx: Area): Promise<Blob> {
 
 type Props = {
     productId: string
-    onDone: (publicUrl: string) => void
+    onDone: (imageId: string, publicUrl: string) => void
     onCancel: () => void
+    hideLibraryTab?: boolean
 }
 
 const css = {
@@ -36,7 +37,7 @@ const css = {
     muted: { color: 'var(--color-admin-muted)' },
 }
 
-export default function ImageCropper({ productId, onDone, onCancel }: Props) {
+export default function ImageCropper({ productId, onDone, onCancel, hideLibraryTab = false }: Props) {
     const [tab, setTab] = useState<Tab>('upload')
     const [showLibrary, setShowLibrary] = useState(false)
 
@@ -80,12 +81,13 @@ export default function ImageCropper({ productId, onDone, onCancel }: Props) {
             })
 
             // 自動存入圖庫
-            await adminFetch('/api/admin/images', {
+            const imgRes = await adminFetch('/api/admin/images', {
                 method: 'POST',
                 body: JSON.stringify({ url: data.publicUrl }),
             })
+            const imgBody = await imgRes.json()
 
-            onDone(data.publicUrl)
+            onDone(imgBody.data.id, data.publicUrl)
         } catch (e: any) {
             setError(e.message ?? '上傳失敗')
         } finally {
@@ -93,32 +95,34 @@ export default function ImageCropper({ productId, onDone, onCancel }: Props) {
         }
     }
 
-    function handleLibrarySelect(url: string) {
+    function handleLibrarySelect(imageId: string, url: string) {
         setShowLibrary(false)
-        onDone(url)
+        onDone(imageId, url)
     }
 
     return (
         <>
             <div className="space-y-3">
                 {/* Tab 切換 */}
-                <div className="flex rounded-lg overflow-hidden border text-sm"
-                    style={{ borderColor: 'var(--color-admin-border)' }}>
-                    {(['upload', 'library'] as Tab[]).map(t => (
-                        <button
-                            key={t}
-                            type="button"
-                            onClick={() => setTab(t)}
-                            className="flex-1 py-2 text-xs font-medium transition-colors"
-                            style={tab === t
-                                ? { backgroundColor: 'var(--color-admin-primary)', color: '#fff' }
-                                : css.surface
-                            }
-                        >
-                            {t === 'upload' ? '上傳新圖片' : '從圖庫選擇'}
-                        </button>
-                    ))}
-                </div>
+                {!hideLibraryTab && (
+                    <div className="flex rounded-lg overflow-hidden border text-sm"
+                        style={{ borderColor: 'var(--color-admin-border)' }}>
+                        {(['upload', 'library'] as Tab[]).map(t => (
+                            <button
+                                key={t}
+                                type="button"
+                                onClick={() => setTab(t)}
+                                className="flex-1 py-2 text-xs font-medium transition-colors"
+                                style={tab === t
+                                    ? { backgroundColor: 'var(--color-admin-primary)', color: '#fff' }
+                                    : css.surface
+                                }
+                            >
+                                {t === 'upload' ? '上傳新圖片' : '從圖庫選擇'}
+                            </button>
+                        ))}
+                    </div>
+                )}
 
                 {tab === 'upload' ? (
                     <>

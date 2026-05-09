@@ -7,7 +7,7 @@ import { adminFetch } from '@/lib/auth/adminClient'
 type ImageRecord = { id: string; url: string; name: string | null; created_at: string }
 
 type Props = {
-    onSelect: (url: string) => void
+    onSelect: (imageId: string, url: string) => void
     onClose: () => void
 }
 
@@ -68,7 +68,7 @@ export default function ImageLibraryModal({ onSelect, onClose }: Props) {
                             {images.map(img => (
                                 <button
                                     key={img.id}
-                                    onClick={() => onSelect(img.url)}
+                                    onClick={() => onSelect(img.id, img.url)}
                                     className="group relative rounded-xl overflow-hidden border-2 text-left transition-all hover:border-blue-500 focus:outline-none"
                                     style={{ borderColor: 'var(--color-admin-border)', aspectRatio: '4/3' }}
                                 >
