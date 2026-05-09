@@ -50,7 +50,7 @@ export default function ImagesPage() {
 
     useEffect(() => { load() }, [])
 
-    function handleUploaded(url: string) {
+    function handleUploaded(_imageId: string, _url: string) {
         setShowUploader(false)
         load()
     }
@@ -106,6 +106,7 @@ export default function ImagesPage() {
                         productId={`library-${Date.now()}`}
                         onDone={handleUploaded}
                         onCancel={() => setShowUploader(false)}
+                        hideLibraryTab
                     />
                 </div>
             )}

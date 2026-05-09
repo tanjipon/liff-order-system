@@ -8,6 +8,8 @@ import { useMinLoading } from '@/hooks/useMinLoading'
 import { CheckCircle } from 'lucide-react'
 import ProductGallery from '@/components/liff/ProductGallery'
 
+type ProductImageLink = { id: string; position: number; product_images: { id: string; url: string } }
+
 type Product = {
     id: string
     name: string
@@ -15,6 +17,13 @@ type Product = {
     stock_qty: number
     max_per_person: number | null
     image_url: string | null
+    product_image_links: ProductImageLink[]
+}
+
+function getProductImages(p: Product): { url: string }[] {
+    return [...(p.product_image_links ?? [])]
+        .sort((a, b) => a.position - b.position)
+        .map(l => ({ url: l.product_images.url }))
 }
 
 type Session = {
@@ -76,6 +85,7 @@ export default function OrderPage() {
     const [orderNumber, setOrderNumber] = useState<number | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [quotaUsed, setQuotaUsed] = useState(0)
+    const [productQuotaUsed, setProductQuotaUsed] = useState<Record<string, number>>({})
 
     const [step, setStep] = useState<'items' | 'pickup' | 'payment' | 'confirm'>('items')
     const [pickupOptions, setPickupOptions] = useState<PickupOption[]>([])
@@ -117,11 +127,17 @@ export default function OrderPage() {
                         .then(res => res.json())
                         .then(body => {
                             if (body.data) {
-                                const used = body.data
-                                    .filter((o: any) => o.status !== 'cancelled')
-                                    .reduce((sum: number, o: any) =>
-                                        sum + o.order_items.reduce((s: number, i: any) => s + i.quantity, 0), 0)
+                                const activeOrders = body.data.filter((o: any) => o.status !== 'cancelled')
+                                const used = activeOrders.reduce((sum: number, o: any) =>
+                                    sum + o.order_items.reduce((s: number, i: any) => s + i.quantity, 0), 0)
                                 setQuotaUsed(used)
+                                const perProduct: Record<string, number> = {}
+                                activeOrders.forEach((o: any) => {
+                                    o.order_items.forEach((i: any) => {
+                                        perProduct[i.product_id] = (perProduct[i.product_id] ?? 0) + i.quantity
+                                    })
+                                })
+                                setProductQuotaUsed(perProduct)
                             }
                         })
                 } else {
@@ -160,7 +176,7 @@ export default function OrderPage() {
         setQuantities(prev => {
             const current = prev[productId] ?? 0
             const effectiveMax = maxPerPerson !== null
-                ? Math.min(maxStock, maxPerPerson - quotaUsed)
+                ? Math.min(maxStock, maxPerPerson - (productQuotaUsed[productId] ?? 0))
                 : maxStock
             const next = Math.max(0, Math.min(current + delta, Math.max(0, effectiveMax)))
             return { ...prev, [productId]: next }
@@ -241,7 +257,7 @@ export default function OrderPage() {
                 )}
                 <h1 className={S.title} style={css.text}>{session.title}</h1>
 
-                <ProductGallery products={session.products} />
+                <ProductGallery products={session.products.map(p => ({ ...p, images: getProductImages(p) }))} />
 
                 {/* opens_at 倒數 */}
                 {notOpenYet && (
@@ -301,7 +317,7 @@ export default function OrderPage() {
                                         disabled={
                                             (quantities[product.id] ?? 0) >= product.stock_qty ||
                                             (session.per_person_limit !== null && totalSelected >= session.per_person_limit) ||
-                                            (product.max_per_person !== null && (quantities[product.id] ?? 0) >= product.max_per_person - quotaUsed)
+                                            (product.max_per_person !== null && (quantities[product.id] ?? 0) >= product.max_per_person - (productQuotaUsed[product.id] ?? 0))
                                         }
                                         className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold text-white disabled:opacity-40"
                                         style={css.primary}

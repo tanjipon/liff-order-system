@@ -16,7 +16,10 @@ export async function GET(
             .from('sessions')
             .select(`
                 id, title, opens_at, closes_at, per_person_limit, is_active, created_at,
-                products ( id, name, price, stock_qty, max_per_person, image_url )
+                products (
+                    id, name, price, stock_qty, max_per_person, image_url,
+                    product_image_links ( id, position, product_images ( id, url ) )
+                )
             `)
             .eq('id', id)
             .single()

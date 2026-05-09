@@ -5,10 +5,12 @@ import { useParams } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
 import AdminError from '@/components/admin/AdminError'
-import ImageCropper from '@/components/admin/ImageCropper'
+import ProductImageStrip, { ImageLink } from '@/components/admin/ProductImageStrip'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import Link from 'next/link'
 import Image from 'next/image'
+
+type ProductImageLink = { id: string; position: number; product_images: { id: string; url: string } }
 
 type Product = {
     id: string
@@ -17,6 +19,13 @@ type Product = {
     stock_qty: number
     max_per_person: number | null
     image_url: string | null
+    product_image_links: ProductImageLink[]
+}
+
+function getImages(p: Product): ImageLink[] {
+    return [...(p.product_image_links ?? [])]
+        .sort((a, b) => a.position - b.position)
+        .map(l => ({ linkId: l.id, imageId: l.product_images.id, url: l.product_images.url }))
 }
 
 type RestockItem = {
@@ -72,7 +81,6 @@ export default function SessionDetailPage() {
         maxPerPerson: string
     } | null>(null)
 
-    const [imageUploadProductId, setImageUploadProductId] = useState<string | null>(null)
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
     const [restocks, setRestocks] = useState<Restock[]>([])
@@ -167,15 +175,6 @@ export default function SessionDetailPage() {
         if (!confirm('確定取消這筆追加庫存排程？')) return
         await adminFetch(`/api/admin/restocks/${restockId}`, { method: 'DELETE' })
         loadRestocks()
-    }
-
-    async function handleImageDone(productId: string, publicUrl: string) {
-        await adminFetch(`/api/admin/products/${productId}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ imageUrl: publicUrl }),
-        })
-        setImageUploadProductId(null)
-        loadSession()
     }
 
     async function handleDelete(productId: string) {
@@ -328,39 +327,21 @@ export default function SessionDetailPage() {
                                     </form>
                                 ) : (
                                     <div className="space-y-3">
-                                        <div className="flex justify-between items-center gap-3">
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                {p.image_url ? (
-                                                    <button onClick={() => setLightboxUrl(p.image_url)} className="shrink-0">
-                                                        <Image
-                                                            src={p.image_url}
-                                                            alt={p.name}
-                                                            width={56}
-                                                            height={42}
-                                                            className="rounded-lg object-cover hover:opacity-80 transition-opacity"
-                                                        />
-                                                    </button>
-                                                ) : (
-                                                    <div className="w-14 h-[42px] rounded-lg shrink-0 flex items-center justify-center border"
-                                                        style={css.surface}>
-                                                        <span className="text-xs" style={css.muted}>無圖</span>
-                                                    </div>
-                                                )}
-                                                <div className="min-w-0">
-                                                    <p className="font-semibold text-sm" style={css.text}>{p.name}</p>
-                                                    <p className="text-xs mt-0.5" style={css.muted}>
-                                                        NT$ {p.price}・庫存 {p.stock_qty}
-                                                        {p.max_per_person ? `・每人限購 ${p.max_per_person} 件` : ''}
-                                                    </p>
-                                                </div>
+                                        <div className="flex justify-between items-start gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-semibold text-sm" style={css.text}>{p.name}</p>
+                                                <p className="text-xs mt-0.5 mb-2" style={css.muted}>
+                                                    NT$ {p.price}・庫存 {p.stock_qty}
+                                                    {p.max_per_person ? `・每人限購 ${p.max_per_person} 件` : ''}
+                                                </p>
+                                                <ProductImageStrip
+                                                    productId={p.id}
+                                                    images={getImages(p)}
+                                                    onLightbox={setLightboxUrl}
+                                                    onChange={loadSession}
+                                                />
                                             </div>
                                             <div className="flex gap-2 shrink-0">
-                                                <button
-                                                    onClick={() => setImageUploadProductId(imageUploadProductId === p.id ? null : p.id)}
-                                                    className="px-3 py-1.5 rounded-lg text-xs border"
-                                                    style={css.surface}>
-                                                    <span style={css.muted}>{p.image_url ? '換圖' : '上傳圖片'}</span>
-                                                </button>
                                                 <button
                                                     onClick={() => setEditState({
                                                         productId: p.id,
@@ -379,13 +360,6 @@ export default function SessionDetailPage() {
                                                     style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>刪除</button>
                                             </div>
                                         </div>
-                                        {imageUploadProductId === p.id && (
-                                            <ImageCropper
-                                                productId={p.id}
-                                                onDone={(url) => handleImageDone(p.id, url)}
-                                                onCancel={() => setImageUploadProductId(null)}
-                                            />
-                                        )}
                                     </div>
                                 )}
                             </div>
