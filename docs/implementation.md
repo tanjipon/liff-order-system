@@ -1,8 +1,16 @@
 # 甜點工作室訂購系統｜實作細節與 GitHub Project 規劃
 
-**版本：** v1.7  
-**依據：** dessert-shop-spec.md v1.5  
+**版本：** v1.12  
+**依據：** dessert-shop-spec.md v1.9  
 **原則：** 最佳軟體工程實踐、單人開發、零成本部署
+
+**v1.12 異動說明：** 新增品牌識別功能。`LiffLoader` 改以 SVG `stroke-dashoffset` 動畫取代 GIF，逐條描繪 Ditto Cake Logo 的 19 條路徑（3 波錯開，4.2 秒循環）；新增 `config/site.ts`（`siteConfig`）集中管理站名與描述；`app/layout.tsx` 引用 siteConfig 並加入 Favicon link tags。新增 M14 Milestone。
+
+**v1.11 異動說明：** 新增多張商品圖片功能。新增 `product_image_links` 表（多對多，含 `position` 排序）；`product_image_links` API（新增、刪除連結）；`ProductImageStrip` 元件（縮圖列 + 刪除 + 開啟 `ImageCropper`）；LIFF `ProductGallery` 改為展示所有商品圖片的橫向 slide；Sessions API 更新 select 以含入圖片連結資料。新增 M13 Milestone。
+
+**v1.10 異動說明：** 新增商品圖庫功能。新增 `product_images` 表（圖片庫，id / url / name / created_at）；Cloudflare R2 存放商品圖片（`@aws-sdk/client-s3`，PUT 預簽 URL + DELETE）；新增 Upload URL API（`POST /api/admin/upload-url`）；Images API（CRUD）；`ImageCropper` 元件（上傳 + 圖庫切換 tab，上傳後自動存入圖庫）；`ImageLibraryModal` 元件（Grid 選圖）；後台 `/admin/images` 圖庫管理頁（lightbox、備註名稱編輯、刪除）；後台 Sidebar 新增「圖庫管理」連結。新增 M12 Milestone。
+
+**v1.9 異動說明：** 新增系統設定功能。新增 `settings` 表（key-value，含 `is_public` 欄位）；後台設定 API（GET / PATCH）；後台 `/admin/settings` 頁面；匯款帳號資訊（`bank_code`、`bank_account`、`bank_holder`）從 `.env` 移至 DB settings，LIFF 查詢頁改呼叫 `/api/settings/public` 取得；移除 `NEXT_PUBLIC_BANK_*` 環境變數。新增 M11 Milestone。
 
 **v1.1 異動說明：** 依據 DB Function vs Backend Logic 分析結果，調整業務邏輯分層。僅保留真正需要原子性保證的操作於 DB Function（`create_order`、`admin_cancel_order`），其餘狀態轉移邏輯移至 Backend，提升可讀性與可測試性。
 
@@ -105,12 +113,18 @@ SUPABASE_SERVICE_ROLE_KEY=     # 僅後台 API 使用，絕不暴露至前端
 # LINE LIFF
 NEXT_PUBLIC_LIFF_ID=
 
-# 匯款帳號資訊（顯示給客戶）
-NEXT_PUBLIC_BANK_CODE=
-NEXT_PUBLIC_BANK_ACCOUNT=
-NEXT_PUBLIC_BANK_HOLDER=
+# Cloudflare R2（商品圖片儲存）
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET_NAME=
+NEXT_PUBLIC_R2_PUBLIC_BASE=   # 圖片公開網域，例如 https://images.example.com
 
-# 備註：後台登入改用 Supabase Auth，不再需要 ADMIN_SECRET
+# 備註：
+# - 後台登入改用 Supabase Auth，不再需要 ADMIN_SECRET
+# - 匯款帳號資訊（bank_code / bank_account / bank_holder）已移至 DB settings 表，
+#   由後台設定頁管理，LIFF 透過 GET /api/settings/public 取得。
+#   不再使用 NEXT_PUBLIC_BANK_* 環境變數。
 ```
 
 ### 2.2 開發環境啟動
@@ -1010,8 +1024,10 @@ export async function initLiff() {
 | `/admin/sessions/[id]/stats` | 開單統計 |
 | `/admin/staff` | 人員管理（列表、新增、停用） |
 | `/admin/roles` | 角色管理（列表、新增角色、勾選權限） |
-| `/admin/sessions/[id]` | 開單詳情（含商品列表、追加庫存排程區塊） |
+| `/admin/sessions/[id]` | 開單詳情（含商品列表、商品圖片縮圖列、追加庫存排程區塊） |
 | `/admin/pickup-options` | 取貨方式管理（列表、新增、編輯、上下架、排序） |
+| `/admin/settings` | 系統設定（匯款帳號資訊等） |
+| `/admin/images` | 圖庫管理（所有已上傳圖片，含 lightbox、備註名稱、刪除） |
 
 ### 5.3 狀態管理
 
@@ -1407,6 +1423,10 @@ jobs:
 | M8 — 開搶時間與追加庫存 | Session 時間條件開放、restock 排程、倒數 UI、追加庫存預告 | 第 8 週 |
 | M9 — 商品個別購買上限 | products.max_per_person、create_order 商品 quota 檢查、後台欄位、LIFF 選購限制 | 第 9 週 |
 | M10 — UI 美化 | 色彩系統、載入動畫、LIFF 手機優先、後台響應式、數字固定寬度 | 第 10 週 |
+| M11 — 系統設定 | settings 表、設定 API、後台設定頁、匯款資訊移至 DB | 第 11 週 |
+| M12 — 商品圖庫 | product_images 表、R2 上傳、ImageCropper、ImageLibraryModal、/admin/images | 第 12 週 |
+| M13 — 多張商品圖片 | product_image_links 表、ProductImageStrip、ProductGallery 多圖 Slide | 第 13 週 |
+| M14 — 品牌識別 | LiffLoader SVG 動畫、config/site.ts、Favicon 設定 | 第 14 週 |
 
 ### 8.3 Issues 清單
 
@@ -1613,6 +1633,82 @@ apps/web/
 [type: feature][layer: frontend] #121 美化後台其他頁面（sessions、orders、staff、roles、pickup-options）
 ```
 
+#### M11 — 系統設定
+
+匯款帳號資訊從 `.env` 移至資料庫，後台新增設定頁面管理。`settings` 表採 key-value 設計，`is_public = true` 的設定可由公開 API 取得，供 LIFF 查詢頁顯示匯款資訊。
+
+```
+[chore][layer: db]          #122 Migration 008：settings 表（id, key, value, is_public, updated_at）
+[type: feature][layer: api] #123 API：GET /api/settings/public（回傳 is_public = true 的設定值，供 LIFF 使用）
+[type: feature][layer: api] #124 API：GET /admin/settings（assertPermission sessions:edit）
+[type: feature][layer: api] #125 API：PATCH /admin/settings（批次更新設定值）
+[type: feature][layer: frontend] #126 後台：/admin/settings 設定頁（顯示並編輯 bank_code / bank_account / bank_holder）
+[chore][layer: frontend]    #127 更新 LIFF 訂單查詢頁：改呼叫 /api/settings/public 取得匯款帳號（移除 NEXT_PUBLIC_BANK_* 用法）
+```
+
+#### M12 — 商品圖庫
+
+商品圖片統一存放於 Cloudflare R2，上傳後自動存入圖庫（`product_images`）。後台可在圖庫管理頁瀏覽、命名、刪除圖片；刪除時同步從 R2 移除檔案。
+
+**關鍵設計：**
+- Upload URL API 發行預簽 PUT URL，前端直接上傳至 R2，後端不做中轉
+- 上傳完成後呼叫 `POST /api/admin/images` 存入圖庫（url, name? ）
+- 刪除圖片時從 URL 解析 R2 object key，呼叫 `DeleteObjectCommand` 後刪除 DB 記錄
+- `ImageCropper` 元件整合「上傳新圖片 / 從圖庫選擇」兩 Tab，`hideLibraryTab` prop 可隱藏 Tab（用於圖庫管理頁的上傳）
+
+```
+[chore][layer: db]          #128 Migration 009：product_images 表（id, url, name, created_at）
+[type: feature][layer: api] #129 API：POST /api/admin/upload-url（發行 R2 預簽 PUT URL）
+[type: feature][layer: api] #130 API：GET /api/admin/images（取得所有圖庫圖片）
+[type: feature][layer: api] #131 API：POST /api/admin/images（新增圖庫記錄）
+[type: feature][layer: api] #132 API：PATCH /api/admin/images/:id（更新圖片備註名稱）
+[type: feature][layer: api] #133 API：DELETE /api/admin/images/:id（刪除 R2 檔案 + DB 記錄）
+[type: feature][layer: frontend] #134 建立 components/admin/ImageCropper.tsx（上傳 Tab + 圖庫 Tab，onDone(imageId, url)，hideLibraryTab prop）
+[type: feature][layer: frontend] #135 建立 components/admin/ImageLibraryModal.tsx（圖庫 Grid，hover 選擇，onSelect(imageId, url)）
+[type: feature][layer: frontend] #136 後台：/admin/images 圖庫管理頁（Grid、Lightbox、備註名稱 inline 編輯、刪除確認 Dialog）
+[chore][layer: frontend]    #137 後台 Sidebar：新增「圖庫管理」導覽項目（/admin/images）
+```
+
+#### M13 — 多張商品圖片
+
+每個商品可關聯多張圖庫圖片，以 `product_image_links` 多對多表管理，`position` 欄位控制排序。LIFF 選購頁的圖片 Carousel 改為展示所有商品圖片的橫向 Slide。
+
+**關鍵設計：**
+- `product_image_links`（product_id, image_id, position, unique(product_id, image_id)）
+- Supabase nested select：`product_image_links(id, position, product_images(id, url))`
+- `getImages(p)` helper：將 nested 資料排序後攤平為 `{linkId, imageId, url}[]`
+- `ProductImageStrip` 直接渲染 `ImageCropper`（含 Tab），不自行加 Tab，避免雙層 Tab 問題
+- `ProductGallery` 接受 `products: {id, name, images: {url}[]}[]`，flatMap 展開所有圖片為 slides
+
+```
+[chore][layer: db]          #138 Migration 010：product_image_links 表（id, product_id FK, image_id FK, position, unique constraint）+ index
+[type: feature][layer: api] #139 API：POST /api/admin/products/:id/images（新增圖片連結，自動計算 nextPosition）
+[type: feature][layer: api] #140 API：DELETE /api/admin/products/:id/images/:linkId（移除圖片連結）
+[chore][layer: api]         #141 更新 GET /api/admin/sessions/:id：products select 含入 product_image_links nested 資料
+[chore][layer: api]         #142 更新 GET /api/sessions/active：products select 含入 product_image_links nested 資料
+[type: feature][layer: frontend] #143 建立 components/admin/ProductImageStrip.tsx（縮圖列 + ✕ 移除 + + 開啟 ImageCropper）
+[chore][layer: frontend]    #144 更新後台開單詳情頁：商品卡片改用 ProductImageStrip，移除舊的單圖換圖按鈕
+[chore][layer: frontend]    #145 更新 components/liff/ProductGallery.tsx：改為多商品多圖 Slide（product name 顯示於圖片下方）
+[chore][layer: frontend]    #146 更新 LIFF /liff/order：傳遞 product_image_links 資料至 ProductGallery
+```
+
+#### M14 — 品牌識別
+
+以 Ditto Cake Logo 的 SVG 路徑取代 GIF 動圖，讓 LIFF 載入頁面改以逐條描繪動畫（`stroke-dashoffset`）呈現品牌 Logo；集中管理站台名稱與描述。
+
+**關鍵設計：**
+- `DASHARRAY=6000`，`@keyframes liff-draw`（dashoffset 6000→0）
+- 19 條路徑分 3 波錯開（Wave 1: 0–200ms，Wave 2: 400–520ms，Wave 3: 720–1280ms），總週期 4200ms
+- `key={cycle}` 強制 React re-mount 實現無限循環（每 4.2s 觸發）
+- `@keyframes liff-fade-out`（0%→68%=1, 90%→100%=0）讓整體在淡出後循環
+- `config/site.ts` 匯出 `siteConfig`（name, description），`app/layout.tsx` 引用
+
+```
+[type: feature][layer: frontend] #147 更新 components/liff/LiffLoader.tsx：內嵌 Ditto Cake SVG 19 條路徑，stroke-dashoffset 動畫（3 波錯開，4.2s 循環）
+[chore][layer: frontend]    #148 新增 config/site.ts：siteConfig（name: 'Ditto Cake', description: '手作甜點工作室'）
+[chore][layer: frontend]    #149 更新 app/layout.tsx：引用 siteConfig 作為 metadata 來源；加入 apple-touch-icon / favicon link tags
+```
+
 **Board View 欄位（Kanban）：**
 
 ```
@@ -1658,7 +1754,11 @@ PR body 必填：
 | M8 — 開搶時間與追加庫存 | 14 | 14 hr |
 | M9 — 商品個別購買上限 | 8 | 6 hr |
 | M10 — UI 美化 | 9 | 12 hr |
-| **總計** | **121** | **~124 hr** |
+| M11 — 系統設定 | 6 | 6 hr |
+| M12 — 商品圖庫 | 10 | 10 hr |
+| M13 — 多張商品圖片 | 9 | 8 hr |
+| M14 — 品牌識別 | 3 | 4 hr |
+| **總計** | **149** | **~152 hr** |
 
 單人每週投入約 10~12 小時，八週完成 MVP 是合理目標。
 

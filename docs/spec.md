@@ -1,7 +1,7 @@
 # 甜點工作室訂購系統規格書
 
-**版本：** v1.5  
-**最後更新：** 2026-04  
+**版本：** v1.9  
+**最後更新：** 2026-05  
 **性質：** 個人工作室，非正式公司
 
 **v1.1 異動說明：** 同步 implementation v1.3 的設計決策。新增 RBAC 系統（人員管理、角色管理）、`per_person_limit` 支援 NULL 無上限、後台驗證改為 Supabase Auth + RBAC、開發排程更新至六週。
@@ -11,6 +11,12 @@
 **v1.3 異動說明：** 新增 Session 預設開搶時間與追加庫存排程功能。`sessions` 表的 `opens_at` / `closes_at` 正式驅動開放判斷邏輯，不再依賴純手動的 `is_active`；新增 `session_restocks` 與 `restock_items` 兩張表；`create_order` DB Function 於下單前惰性套用到期的 restock；後台新增追加庫存排程 UI；LIFF 客戶端顯示倒數與追加庫存預告；新增 `restocks:manage` 權限項目；開發排程更新至八週。
 
 **v1.6 異動說明：** 新增 M10 UI 美化規格。明確定義 LIFF 手機優先設計規範、後台響應式佈局、色彩系統、載入體驗、數字顯示穩定性等 UX 要求；新增第十週開發排程。
+
+**v1.7 異動說明：** 新增系統設定規格。新增 `settings` 表（key-value，含 `is_public`）；匯款帳號資訊（`bank_code`、`bank_account`、`bank_holder`）從環境變數移至 DB；新增後台設定頁（`/admin/settings`）；新增公開設定 API（`GET /api/settings/public`）；移除 `NEXT_PUBLIC_BANK_*` 環境變數；新增 M11 Milestone。
+
+**v1.8 異動說明：** 新增商品圖庫與多張商品圖片規格。`product_images` 表（圖片庫）；Cloudflare R2 存放圖片；上傳時自動存入圖庫；可從圖庫選擇圖片；後台 `/admin/images` 圖庫管理頁；`product_image_links` 多對多表支援每個商品關聯多張圖片；LIFF 選購頁展示多圖 Slide；新增 M12、M13 Milestone。
+
+**v1.9 異動說明：** 新增品牌識別規格。LIFF 載入動畫改為 SVG `stroke-dashoffset` 逐條描繪（Ditto Cake Logo，3 波錯開，4.2s 循環）；新增 `config/site.ts` 集中管理站名；Favicon 設定（apple-touch-icon / favicon-32x32 / favicon-16x16 / site.webmanifest）；新增 M14 Milestone。更新 11.3 節：GIF 動圖改為 SVG 動畫規格。
 
 **v1.5 異動說明：** 新增商品個別購買上限。`products` 表新增 `max_per_person`（NULL = 不限）；與 `sessions.per_person_limit` 並存，各自獨立控制；`create_order` 加入 per-product quota 檢查；新增錯誤碼 `PRODUCT_QUOTA_EXCEEDED`；後台商品表單與 LIFF 選購頁同步更新；新增 M9 Milestone。
 
@@ -79,6 +85,9 @@
     ├── orders（訂單紀錄）
     ├── order_items（訂單品項）
     ├── pickup_options（取貨方式）
+    ├── settings（系統設定，key-value）
+    ├── product_images（圖片庫）
+    ├── product_image_links（商品與圖片多對多）
     ├── roles（後台角色定義）
     ├── permissions（後台權限項目）
     ├── role_permissions（角色與權限對應）
@@ -210,6 +219,41 @@
 | display_name | text | 顯示姓名 |
 | is_active | boolean | 是否啟用（停用時無法登入後台） |
 | created_at | timestamp | 建立時間 |
+
+#### settings（系統設定）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid PK | 主鍵 |
+| key | text UNIQUE | 設定識別碼，例如 `bank_code`、`bank_account`、`bank_holder` |
+| value | text | 設定值 |
+| is_public | boolean | `true` 時可由公開 API 取得（LIFF 查詢頁使用） |
+| updated_at | timestamp | 最後更新時間 |
+
+**設計原則：** 所有後台可設定的參數統一存此表，避免散落在環境變數中難以管理。
+
+#### product_images（圖片庫）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid PK | 主鍵 |
+| url | text | Cloudflare R2 公開 URL |
+| name | text | 備註名稱（可為 null，老闆在後台填寫） |
+| created_at | timestamp | 建立時間 |
+
+**設計原則：** 圖片上傳後自動存入此表（無論是從商品直接上傳或從圖庫管理頁上傳）。刪除圖片時先從 R2 移除檔案，再刪除此表記錄。
+
+#### product_image_links（商品圖片關聯）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| id | uuid PK | 主鍵 |
+| product_id | uuid FK | 所屬商品（on delete cascade） |
+| image_id | uuid FK | 所屬圖片（on delete cascade） |
+| position | int | 排列順序（新增時自動累加） |
+| created_at | timestamp | 建立時間 |
+
+**Unique constraint：** `(product_id, image_id)` — 同一圖片不可重複關聯至同一商品。
 
 ### 3.2 防黃牛 Quota 計算
 
@@ -444,6 +488,36 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 - 上架 / 下架（切換 `is_active`，下架後客戶選購頁不顯示）
 - 拖曳調整顯示順序
 
+### 7.8 系統設定
+
+具備 `sessions:edit` 權限的人員可操作（入口位於後台 `/admin/settings`）：
+
+- 查看目前所有設定值（key / value / is_public）
+- 編輯匯款帳號資訊：`bank_code`（銀行代碼）、`bank_account`（帳號）、`bank_holder`（戶名）
+- 儲存後即時生效（LIFF 查詢頁下次呼叫 `/api/settings/public` 即取得最新值）
+
+### 7.9 圖庫管理
+
+後台 `/admin/images` 頁面，無需特定權限（登入後台即可訪問）：
+
+- 以 Grid（4 欄）檢視所有已上傳圖片
+- 點擊縮圖開啟 Lightbox 放大檢視
+- 點擊備註名稱進行 inline 編輯（Enter 儲存，Escape 取消）
+- 刪除圖片（二次確認 Dialog，刪除後同步移除 R2 檔案）
+- 點擊「上傳新圖片」開啟 `ImageCropper`（裁切後上傳並自動存入圖庫）
+
+**圖片命名規則：** 備註名稱純屬後台辨識用，不影響 URL 或客戶端顯示。
+
+### 7.10 商品圖片管理
+
+商品圖片功能整合在後台開單詳情頁的商品卡片內：
+
+- 每個商品顯示已關聯的圖片縮圖列（56×42px）
+- 點擊縮圖開啟 Lightbox
+- 縮圖右上角的 ✕ 按鈕可移除圖片關聯（不刪除圖庫中的圖片）
+- 點擊 `+` 按鈕開啟 `ImageCropper`（可上傳新圖片或從圖庫選擇）
+- 圖片顯示順序依 `position` 排列（新增時自動追加至末尾）
+
 ### 7.7 追加庫存排程管理
 
 具備 `restocks:manage` 權限的人員可操作。入口位於**開單詳情頁**，與商品列表整合：
@@ -475,6 +549,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | 端點 | 方法 | 說明 |
 |------|------|------|
 | `/sessions/active` | GET | 取得目前開放或即將開放的 session；後端主動套用到期 restock 後回傳；response 含 `next_restock_at`（下一波追加庫存時間，`null` 表示無排程） |
+| `/settings/public` | GET | 取得 `is_public = true` 的設定值（如匯款帳號資訊），供 LIFF 查詢頁使用 |
 | `/orders` | POST | 建立新訂單 |
 | `/orders?line_user_id=xxx` | GET | 查詢自己的訂單列表 |
 | `/orders/:id/remit` | PATCH | 填入匯款後五碼 |
@@ -512,6 +587,15 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | `/admin/sessions/:id/restocks` | GET | 取得此 session 所有 restock 排程 |
 | `/admin/sessions/:id/restocks` | POST | 新增追加庫存排程 |
 | `/admin/restocks/:id` | DELETE | 取消尚未套用的 restock 排程 |
+| `/admin/settings` | GET | 取得所有設定值 |
+| `/admin/settings` | PATCH | 更新設定值 |
+| `/admin/upload-url` | POST | 發行 Cloudflare R2 預簽 PUT URL（前端直傳 R2，後端不做中轉） |
+| `/admin/images` | GET | 取得所有圖庫圖片 |
+| `/admin/images` | POST | 新增圖庫記錄（url, name?） |
+| `/admin/images/:id` | PATCH | 更新圖片備註名稱 |
+| `/admin/images/:id` | DELETE | 刪除圖片（R2 檔案 + DB 記錄） |
+| `/admin/products/:id/images` | POST | 新增商品圖片連結 |
+| `/admin/products/:id/images/:linkId` | DELETE | 移除商品圖片連結 |
 
 ---
 
@@ -557,6 +641,10 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | 第八週 | 後台追加庫存排程管理（新增、查看、取消）、LIFF 追加庫存提示 | 老闆可排程追加庫存 |
 | 第九週 | products.max_per_person 欄位、create_order 商品 quota 檢查、後台表單與 LIFF 選購頁限制 | 熱門商品公平分配 |
 | 第十週 | UI 美化（色彩系統、載入動畫、LIFF 手機優先、後台響應式、數字固定寬度） | 整體 UX 提升 |
+| 第十一週 | 系統設定（settings 表、設定頁、匯款資訊移至 DB） | 後台自助管理設定 |
+| 第十二週 | 商品圖庫（product_images、R2 上傳、ImageCropper、圖庫管理頁） | 商品圖片集中管理 |
+| 第十三週 | 多張商品圖片（product_image_links、ProductImageStrip、LIFF 多圖 Slide） | 每個商品展示多張圖片 |
+| 第十四週 | 品牌識別（LiffLoader SVG 動畫、config/site.ts、Favicon） | 一致的品牌視覺體驗 |
 
 ---
 
@@ -588,6 +676,8 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | `--color-liff-muted` | `#9C7080` | 次要文字、說明文字 |
 | `--color-liff-success` | `#86EFAC` | 成功狀態 |
 
+> **注意：** `--color-liff-primary` 亦作為 LiffLoader SVG 描繪線條的顏色（`stroke="var(--color-liff-primary)"`），改色時同步影響載入動畫外觀。
+
 **Admin Gmail 系 token：**
 
 | Token | 色碼 | 用途 |
@@ -616,13 +706,24 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 - **Active 狀態**：以 `--color-admin-sidebar-active` 背景 + 圓角 pill 標示當前頁面
 - **載入動畫**：SVG spinner（`animate-spin`），支援全版頁面（`min-h-screen` 居中）與 inline 兩種模式
 
-### 11.5 GIF 動圖規格
+### 11.5 LIFF 載入動畫規格（SVG，M14 更新）
+
+**v1.9 更新：** GIF 動圖改為 SVG `stroke-dashoffset` 路徑描繪動畫，使用 Ditto Cake Logo（19 條路徑）。
+
+| 項目 | 規格 |
+|------|------|
+| 元件 | `components/liff/LiffLoader.tsx` |
+| 動畫方式 | CSS `stroke-dashoffset`（`DASHARRAY=6000`，0→6000 反向描繪） |
+| 路徑數量 | 19 條 SVG path |
+| 波段分組 | Wave 1（頂部插圖，0–200ms）/ Wave 2（人物，400–520ms）/ Wave 3（文字，720–1280ms） |
+| 週期 | 4200ms（`key={cycle}` + `setInterval` 強制 re-mount 實現無限循環） |
+| 淡出 | `@keyframes liff-fade-out`（68%–90% 淡出，100% 結束後由下一個 cycle 接續） |
+| 線條 | `strokeWidth="8"`，`stroke="var(--color-liff-primary)"`，`fill="none"` |
+
+**原 GIF 動圖規格（已棄用，M10 設計，M14 取代）：**
 
 | 項目 | 規格 |
 |------|------|
 | 格式 | GIF 或 APNG |
 | 尺寸 | 160 × 160 px（顯示 80px，Retina 清晰）|
-| 背景 | 透明 |
-| 循環 | 無限循環 |
-| 幀率 | 12–24 fps |
 | 路徑 | `apps/web/public/loading-dog.gif` |
