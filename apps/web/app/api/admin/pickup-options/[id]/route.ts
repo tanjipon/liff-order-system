@@ -13,13 +13,14 @@ export async function PATCH(
         assertPermission(ctx, 'pickup_options:manage')
 
         const supabase = getSupabaseAdmin()
-        const { name, description, extraFee, allowedPaymentMethods } = await req.json()
+        const { name, description, extraFee, allowedPaymentMethods, requiresAddress } = await req.json()
 
         const updates: Record<string, unknown> = {}
         if (name !== undefined)                    updates.name = name
         if (description !== undefined)             updates.description = description
         if (extraFee !== undefined)                updates.extra_fee = extraFee
         if (allowedPaymentMethods !== undefined)   updates.allowed_payment_methods = allowedPaymentMethods
+        if (requiresAddress !== undefined)         updates.requires_address = requiresAddress
 
         if (Object.keys(updates).length === 0) {
             return errorResponse('MISSING_FIELDS', 400)
