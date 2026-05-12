@@ -363,7 +363,6 @@ export default function AdminDashBoard() {
                                     <p className="text-xs font-semibold mb-0.5" style={css.muted}>訂購人</p>
                                     <p className="text-xs" style={css.text}>{order.customer_name}</p>
                                     <p className="text-xs" style={css.muted}>{order.customer_phone}</p>
-                                    <p className="text-xs mt-0.5" style={{ color: '#06B6D4' }}>LINE名稱：{order.line_display_name}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs font-semibold mb-0.5" style={css.muted}>收貨人</p>
