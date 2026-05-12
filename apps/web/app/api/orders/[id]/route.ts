@@ -31,6 +31,7 @@ export async function GET(
                 recipient_phone,
                 recipient_address,
                 sessions ( title ),
+                pickup_options ( name, description ),
                 order_items (
                     quantity,
                     unit_price,

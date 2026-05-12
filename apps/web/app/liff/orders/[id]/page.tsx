@@ -31,6 +31,7 @@ type Order = {
     recipient_phone: string
     recipient_address: string | null
     sessions: { title: string } | null
+    pickup_options: { name: string; description: string | null } | null
     order_items: OrderItem[]
 }
 
@@ -351,6 +352,17 @@ export default function OrderDetailPage() {
                             </div>
                         )}
                     </div>
+
+                    {/* Pickup method card */}
+                    {order.pickup_options && (
+                        <div className="rounded-2xl border p-4" style={css.surface}>
+                            <p className="text-xs mb-1" style={css.muted}>取貨方式</p>
+                            <p className="font-semibold text-sm" style={css.text}>{order.pickup_options.name}</p>
+                            {order.pickup_options.description && (
+                                <p className="text-xs mt-0.5" style={css.muted}>{order.pickup_options.description}</p>
+                            )}
+                        </div>
+                    )}
 
                     {/* 聯絡資訊卡 */}
                     {(order.customer_name || order.recipient_name) && (
