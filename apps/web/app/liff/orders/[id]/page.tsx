@@ -25,6 +25,11 @@ type Order = {
     queue_number: number | null
     created_at: string
     customer_note: string | null
+    customer_name: string
+    customer_phone: string
+    recipient_name: string
+    recipient_phone: string
+    recipient_address: string | null
     sessions: { title: string } | null
     order_items: OrderItem[]
 }
@@ -346,6 +351,31 @@ export default function OrderDetailPage() {
                             </div>
                         )}
                     </div>
+
+                    {/* 聯絡資訊卡 */}
+                    {(order.customer_name || order.recipient_name) && (
+                        <div className="rounded-2xl border p-4 space-y-3" style={css.surface}>
+                            <p className="text-xs font-semibold" style={css.muted}>聯絡資訊</p>
+                            <div className="space-y-1">
+                                <p className="text-xs" style={css.muted}>訂購人</p>
+                                <p className="text-sm" style={css.text}>
+                                    {order.customer_name}　{order.customer_phone}
+                                </p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-xs" style={css.muted}>收貨人</p>
+                                <p className="text-sm" style={css.text}>
+                                    {order.recipient_name}　{order.recipient_phone}
+                                </p>
+                            </div>
+                            {order.recipient_address && (
+                                <div className="space-y-1">
+                                    <p className="text-xs" style={css.muted}>收貨地址</p>
+                                    <p className="text-sm" style={css.text}>{order.recipient_address}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* pending 操作卡 */}
                     {order.status === 'pending' && !editingMode && (

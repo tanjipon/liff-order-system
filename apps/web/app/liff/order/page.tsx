@@ -7,6 +7,8 @@ import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import { CheckCircle } from 'lucide-react'
 import ProductGallery from '@/components/liff/ProductGallery'
+import AddressInput, { type AddressParts, EMPTY_ADDRESS } from '@/components/liff/AddressInput'
+import { formatAddress } from '@/lib/twAddress'
 
 type ProductImageLink = { id: string; position: number; product_images: { id: string; url: string } }
 
@@ -42,6 +44,7 @@ type PickupOption = {
     description: string | null
     extra_fee: number
     allowed_payment_methods: string[] | null
+    requires_address: boolean
 }
 
 // ── Shared styles ──────────────────────────────────────────
@@ -87,10 +90,18 @@ export default function OrderPage() {
     const [quotaUsed, setQuotaUsed] = useState(0)
     const [productQuotaUsed, setProductQuotaUsed] = useState<Record<string, number>>({})
 
-    const [step, setStep] = useState<'items' | 'pickup' | 'payment' | 'confirm'>('items')
+    const [step, setStep] = useState<'items' | 'pickup' | 'payment' | 'contact' | 'confirm'>('items')
     const [pickupOptions, setPickupOptions] = useState<PickupOption[]>([])
     const [selectedPickup, setSelectedPickup] = useState<PickupOption | null>(null)
     const [selectedPayment, setSelectedPayment] = useState<'bank_transfer' | 'cash' | null>(null)
+
+    // Contact info
+    const [customerName, setCustomerName] = useState('')
+    const [customerPhone, setCustomerPhone] = useState('')
+    const [sameAsCustomer, setSameAsCustomer] = useState(true)
+    const [recipientName, setRecipientName] = useState('')
+    const [recipientPhone, setRecipientPhone] = useState('')
+    const [recipientAddress, setRecipientAddress] = useState<AddressParts>(EMPTY_ADDRESS)
 
     const [now, setNow] = useState(() => Date.now())
     const { combine } = useMinLoading(1500)
@@ -227,6 +238,11 @@ export default function OrderPage() {
                         .map(p => ({ product_id: p.id, quantity: quantities[p.id] })),
                     pickupOptionId: selectedPickup!.id,
                     paymentMethod: selectedPayment!,
+                    customerName,
+                    customerPhone,
+                    recipientName:    sameAsCustomer ? customerName : recipientName,
+                    recipientPhone:   sameAsCustomer ? customerPhone : recipientPhone,
+                    recipientAddress: selectedPickup!.requires_address ? formatAddress(recipientAddress) : null,
                 })
             })
             const body = await res.json()
@@ -419,9 +435,114 @@ export default function OrderPage() {
                         ))}
                     </div>
                     <button
-                        onClick={() => setStep('confirm')}
+                        onClick={() => setStep('contact')}
                         disabled={!selectedPayment}
                         className={`mt-6 ${S.primaryBtn}`}
+                        style={css.primary}
+                    >
+                        下一步：填寫資料
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
+    // ── Step 4: Contact info ──────────────────────────────────
+    if (step === 'contact') {
+        const requiresAddress = selectedPickup?.requires_address ?? false
+        const contactValid =
+            customerName.trim() !== '' &&
+            customerPhone.trim() !== '' &&
+            (sameAsCustomer || (recipientName.trim() !== '' && recipientPhone.trim() !== '')) &&
+            (!requiresAddress || (recipientAddress.city !== '' && recipientAddress.district !== '' && recipientAddress.street.trim() !== ''))
+
+        return (
+            <div className={S.outer} style={css.bg}>
+                <div className={S.inner}>
+                    <button onClick={() => setStep('payment')} className={S.backBtn} style={css.muted}>← 返回</button>
+                    <h2 className={S.title} style={css.text}>填寫資料</h2>
+
+                    {/* Orderer info */}
+                    <div className={`${S.card} space-y-3 mb-4`} style={css.surface}>
+                        <p className="text-xs font-semibold uppercase tracking-wide" style={css.muted}>訂購人資訊</p>
+                        <div>
+                            <label className="block text-xs mb-1" style={css.muted}>姓名</label>
+                            <input
+                                value={customerName}
+                                onChange={e => setCustomerName(e.target.value)}
+                                placeholder="姓名"
+                                className={S.input}
+                                style={css.surface}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs mb-1" style={css.muted}>聯絡電話</label>
+                            <input
+                                value={customerPhone}
+                                onChange={e => setCustomerPhone(e.target.value)}
+                                placeholder="電話"
+                                type="tel"
+                                className={S.input}
+                                style={css.surface}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Same-as-customer toggle */}
+                    <label className="flex items-center gap-2 text-sm mb-4 cursor-pointer" style={css.text}>
+                        <input
+                            type="checkbox"
+                            checked={sameAsCustomer}
+                            onChange={e => setSameAsCustomer(e.target.checked)}
+                            className="accent-pink-400 w-4 h-4"
+                        />
+                        收貨人同訂購人
+                    </label>
+
+                    {/* Recipient info — only shown when not same as customer */}
+                    {!sameAsCustomer && (
+                        <div className={`${S.card} space-y-3 mb-4`} style={css.surface}>
+                            <p className="text-xs font-semibold uppercase tracking-wide" style={css.muted}>收貨人資訊</p>
+                            <div>
+                                <label className="block text-xs mb-1" style={css.muted}>姓名</label>
+                                <input
+                                    value={recipientName}
+                                    onChange={e => setRecipientName(e.target.value)}
+                                    placeholder="姓名"
+                                    className={S.input}
+                                    style={css.surface}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs mb-1" style={css.muted}>電話</label>
+                                <input
+                                    value={recipientPhone}
+                                    onChange={e => setRecipientPhone(e.target.value)}
+                                    placeholder="電話"
+                                    type="tel"
+                                    className={S.input}
+                                    style={css.surface}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Shipping address — only shown when pickup requires it */}
+                    {requiresAddress && (
+                        <div className={`${S.card} space-y-3 mb-4`} style={css.surface}>
+                            <p className="text-xs font-semibold uppercase tracking-wide" style={css.muted}>收貨地址</p>
+                            <AddressInput
+                                value={recipientAddress}
+                                onChange={setRecipientAddress}
+                                surfaceStyle={css.surface}
+                            />
+                        </div>
+                    )}
+
+                    <button
+                        onClick={() => setStep('confirm')}
+                        disabled={!contactValid}
+                        className={S.primaryBtn}
                         style={css.primary}
                     >
                         下一步：確認訂單
@@ -431,7 +552,7 @@ export default function OrderPage() {
         )
     }
 
-    // ── Step 4: 確認訂單 ──────────────────────────────────────
+    // ── Step 5: 確認訂單 ──────────────────────────────────────
     if (step === 'confirm') {
         const pickupFee = selectedPickup?.extra_fee ?? 0
         const totalAmount = itemSubtotal + pickupFee
@@ -439,7 +560,7 @@ export default function OrderPage() {
         return (
             <div className={S.outer} style={css.bg}>
                 <div className={S.inner}>
-                    <button onClick={() => setStep('payment')} className={S.backBtn} style={css.muted}>← 返回</button>
+                    <button onClick={() => setStep('contact')} className={S.backBtn} style={css.muted}>← 返回</button>
                     <h2 className={S.title} style={css.text}>確認訂單</h2>
 
                     {/* 商品明細 */}
@@ -473,11 +594,28 @@ export default function OrderPage() {
                     </div>
 
                     {/* 付款方式 */}
-                    <div className={`${S.card} mb-6`} style={css.surface}>
+                    <div className={`${S.card} mb-4`} style={css.surface}>
                         <p className="text-xs mb-1" style={css.muted}>付款方式</p>
                         <p className="font-semibold text-sm" style={css.text}>
                             {selectedPayment === 'bank_transfer' ? '銀行匯款' : '現金付款'}
                         </p>
+                    </div>
+
+                    {/* Contact summary */}
+                    <div className={`${S.card} mb-6 space-y-2`} style={css.surface}>
+                        <div>
+                            <p className="text-xs mb-0.5" style={css.muted}>訂購人</p>
+                            <p className="text-sm font-semibold" style={css.text}>{customerName}　{customerPhone}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs mb-0.5" style={css.muted}>收貨人</p>
+                            <p className="text-sm font-semibold" style={css.text}>
+                                {sameAsCustomer ? customerName : recipientName}　{sameAsCustomer ? customerPhone : recipientPhone}
+                            </p>
+                            {selectedPickup?.requires_address && recipientAddress.city && (
+                                <p className="text-xs mt-0.5" style={css.muted}>{formatAddress(recipientAddress)}</p>
+                            )}
+                        </div>
                     </div>
 
                     {error && <p className="text-sm mb-3 text-center" style={{ color: '#C0392B' }}>{error}</p>}
