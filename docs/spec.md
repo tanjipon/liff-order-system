@@ -1,6 +1,6 @@
 # 甜點工作室訂購系統規格書
 
-**版本：** v1.9  
+**版本：** v1.10  
 **最後更新：** 2026-05  
 **性質：** 個人工作室，非正式公司
 
@@ -15,6 +15,8 @@
 **v1.7 異動說明：** 新增系統設定規格。新增 `settings` 表（key-value，含 `is_public`）；匯款帳號資訊（`bank_code`、`bank_account`、`bank_holder`）從環境變數移至 DB；新增後台設定頁（`/admin/settings`）；新增公開設定 API（`GET /api/settings/public`）；移除 `NEXT_PUBLIC_BANK_*` 環境變數；新增 M11 Milestone。
 
 **v1.8 異動說明：** 新增商品圖庫與多張商品圖片規格。`product_images` 表（圖片庫）；Cloudflare R2 存放圖片；上傳時自動存入圖庫；可從圖庫選擇圖片；後台 `/admin/images` 圖庫管理頁；`product_image_links` 多對多表支援每個商品關聯多張圖片；LIFF 選購頁展示多圖 Slide；新增 M12、M13 Milestone。
+
+**v1.10 異動說明：** 新增訂購人與收貨人資訊規格。`orders` 表新增 `customer_name`、`customer_phone`、`recipient_name`、`recipient_phone`、`recipient_address` 五個欄位；`pickup_options` 新增 `requires_address` 旗標控制地址是否必填；LIFF 訂購流程新增「填寫資料」步驟，支援「收貨人同訂購人」快速帶入；後台訂單卡片展示完整聯絡與收貨資訊；新增 M15 Milestone。
 
 **v1.9 異動說明：** 新增品牌識別規格。LIFF 載入動畫改為 SVG `stroke-dashoffset` 逐條描繪（Ditto Cake Logo，3 波錯開，4.2s 循環）；新增 `config/site.ts` 集中管理站名；Favicon 設定（apple-touch-icon / favicon-32x32 / favicon-16x16 / site.webmanifest）；新增 M14 Milestone。更新 11.3 節：GIF 動圖改為 SVG 動畫規格。
 
@@ -138,6 +140,11 @@
 | remit_last5 | text | 匯款後五碼（僅 `bank_transfer` 適用） |
 | pickup_option_id | uuid FK | 客戶選擇的取貨方式 |
 | pickup_fee | int | 下單當時的取貨費用快照（防止事後修改費用影響舊訂單） |
+| customer_name | text | 訂購人姓名 |
+| customer_phone | text | 訂購人聯絡電話 |
+| recipient_name | text | 收貨人姓名（可同訂購人） |
+| recipient_phone | text | 收貨人電話（可同訂購人） |
+| recipient_address | text | 收貨地址；僅取貨方式 `requires_address = true` 時必填，其餘可為 `NULL` |
 | queue_number | int | 排單號碼 |
 | edit_count | int | 修改次數（預設 0） |
 | last_edited_at | timestamp | 最後修改時間 |
@@ -164,6 +171,7 @@
 | description | text | 說明文字，例如取貨地點、時間、注意事項 |
 | extra_fee | int | 額外費用（新台幣），`0` 代表免費 |
 | allowed_payment_methods | text[] | 允許的付款方式，`NULL` 代表不限制；例如宅配可限制為 `['bank_transfer']` |
+| requires_address | boolean | 是否需要填寫收貨地址；宅配設為 `true`，自取設為 `false` |
 | is_active | boolean | 是否開放；下架後客戶選購頁不顯示 |
 | sort_order | int | 排列順序（影響客戶端顯示順序） |
 | created_at | timestamp | 建立時間 |
@@ -364,15 +372,19 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 5. 瀏覽商品，選擇品項與數量（系統已在頁面載入時主動套用到期 restock；單品設有 `max_per_person` 時，數量選擇器自動限制上限並顯示提示；庫存為 0 時，若 `next_restock_at` 有值則顯示「追加庫存將於 XX:XX 開放」倒數，時間到自動刷新庫存；無排程則顯示「已售完」）
 6. 選擇取貨方式（顯示名稱、說明、費用）
 7. 選擇付款方式（依取貨方式的 `allowed_payment_methods` 過濾可選項）
-8. 確認頁顯示：商品小計 + 取貨費用 + 總金額
-9. 送出訂單，畫面顯示訂單編號，狀態為「待確認」
-10. **待確認期間**：可回 LIFF 修改品項、數量，或取消訂單
-11. 老闆確認接單後，狀態變為「製作中」，客戶端鎖定，無法再修改
-12. 製作完成後，老闆通知付款（透過 LINE 群組告知）
-13. 客戶回 LIFF 查詢頁：
+8. 填寫訂購人與收貨人資訊：
+    - **訂購人**：姓名、聯絡電話（必填）
+    - **收貨人**：可勾選「同訂購人」自動帶入；若取消勾選，需另填姓名、電話
+    - **收貨地址**：僅取貨方式 `requires_address = true` 時顯示並為必填
+9. 確認頁顯示：商品明細 + 商品小計 + 取貨費用 + 總金額 + 付款方式 + 收貨資訊摘要
+10. 送出訂單，畫面顯示訂單編號，狀態為「待確認」
+11. **待確認期間**：可回 LIFF 修改品項、數量，或取消訂單
+12. 老闆確認接單後，狀態變為「製作中」，客戶端鎖定，無法再修改
+13. 製作完成後，老闆通知付款（透過 LINE 群組告知）
+14. 客戶回 LIFF 查詢頁：
     - **匯款**：依畫面顯示帳號完成 ATM / 網銀匯款，填入後五碼送出
     - **現金**：等待老闆當面收款確認
-14. 老闆確認收款後，訂單狀態變為「完成」
+15. 老闆確認收款後，訂單狀態變為「完成」
 
 ### 5.2 老闆後台流程
 
@@ -413,6 +425,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 - 製作中列表：可標記完成、可取消
 - 待付款列表：可確認收款、可取消
 - 確認付款中列表：可確認收款
+- 每筆訂單卡片可展開查看訂購人姓名、電話，以及收貨人姓名、電話、地址（有填才顯示）
 
 ### 7.2 歷史訂單查詢
 
@@ -483,8 +496,8 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 具備 `pickup_options:manage` 權限的人員可操作：
 
 - 查看目前所有取貨方式（含費用、說明、狀態）
-- 新增取貨方式（名稱、說明、費用、允許付款方式、排列順序）
-- 編輯取貨方式（費用修改只影響新訂單，舊訂單已快照 `pickup_fee`）
+- 新增取貨方式（名稱、說明、費用、允許付款方式、是否需要收貨地址、排列順序）
+- 編輯取貨方式（費用修改只影響新訂單，舊訂單已快照 `pickup_fee`；`requires_address` 修改立即影響新訂單的表單顯示）
 - 上架 / 下架（切換 `is_active`，下架後客戶選購頁不顯示）
 - 拖曳調整顯示順序
 
@@ -550,6 +563,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 |------|------|------|
 | `/sessions/active` | GET | 取得目前開放或即將開放的 session；後端主動套用到期 restock 後回傳；response 含 `next_restock_at`（下一波追加庫存時間，`null` 表示無排程） |
 | `/settings/public` | GET | 取得 `is_public = true` 的設定值（如匯款帳號資訊），供 LIFF 查詢頁使用 |
+| `/pickup-options` | GET | 取得 active 取貨方式列表；response 含 `requires_address` 欄位，供 LIFF 判斷是否顯示地址欄位 |
 | `/orders` | POST | 建立新訂單 |
 | `/orders?line_user_id=xxx` | GET | 查詢自己的訂單列表 |
 | `/orders/:id/remit` | PATCH | 填入匯款後五碼 |
@@ -645,6 +659,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | 第十二週 | 商品圖庫（product_images、R2 上傳、ImageCropper、圖庫管理頁） | 商品圖片集中管理 |
 | 第十三週 | 多張商品圖片（product_image_links、ProductImageStrip、LIFF 多圖 Slide） | 每個商品展示多張圖片 |
 | 第十四週 | 品牌識別（LiffLoader SVG 動畫、config/site.ts、Favicon） | 一致的品牌視覺體驗 |
+| 第十五週 | 訂購人與收貨人資訊（orders 新欄位、pickup_options.requires_address、LIFF 填寫資料步驟、後台顯示） | 工作室可追蹤客戶聯絡資訊與收貨地址 |
 
 ---
 

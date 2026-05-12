@@ -1,8 +1,10 @@
 # 甜點工作室訂購系統｜實作細節與 GitHub Project 規劃
 
-**版本：** v1.12  
+**版本：** v1.13  
 **依據：** dessert-shop-spec.md v1.9  
 **原則：** 最佳軟體工程實踐、單人開發、零成本部署
+
+**v1.13 異動說明：** 新增訂購人與收貨人資訊功能。`pickup_options` 新增 `requires_address boolean`；`orders` 新增 `customer_name`、`customer_phone`、`recipient_name`、`recipient_phone`、`recipient_address` 五個欄位；`create_order` DB Function 新增對應參數；`POST /api/orders` 接收新欄位；LIFF 訂購流程新增 `contact` 步驟（含「收貨人同訂購人」checkbox，`requires_address` 控制地址欄位顯示）；後台訂單卡片展示訂購人與收貨人資訊；後台取貨方式管理新增 `requires_address` 切換。新增 M15 Milestone。
 
 **v1.12 異動說明：** 新增品牌識別功能。`LiffLoader` 改以 SVG `stroke-dashoffset` 動畫取代 GIF，逐條描繪 Ditto Cake Logo 的 19 條路徑（3 波錯開，4.2 秒循環）；新增 `config/site.ts`（`siteConfig`）集中管理站名與描述；`app/layout.tsx` 引用 siteConfig 並加入 Favicon link tags。新增 M14 Milestone。
 
@@ -1015,7 +1017,7 @@ export async function initLiff() {
 
 | 路由 | 說明 |
 |------|------|
-| `/liff/order` | LIFF 訂購頁（商品選擇 → 取貨方式 → 付款方式 → 確認 → 送出） |
+| `/liff/order` | LIFF 訂購頁（商品選擇 → 取貨方式 → 付款方式 → 填寫資料 → 確認 → 送出） |
 | `/liff/status` | LIFF 訂單狀態查詢頁 |
 | `/admin/login` | 後台登入頁（Email + 密碼） |
 | `/admin` | 後台首頁（進行中訂單 Dashboard） |
@@ -1427,6 +1429,7 @@ jobs:
 | M12 — 商品圖庫 | product_images 表、R2 上傳、ImageCropper、ImageLibraryModal、/admin/images | 第 12 週 |
 | M13 — 多張商品圖片 | product_image_links 表、ProductImageStrip、ProductGallery 多圖 Slide | 第 13 週 |
 | M14 — 品牌識別 | LiffLoader SVG 動畫、config/site.ts、Favicon 設定 | 第 14 週 |
+| M15 — 訂購人與收貨人資訊 | orders 新增聯絡欄位、pickup_options.requires_address、LIFF 填寫資料步驟、後台訂單顯示 | 第 15 週 |
 
 ### 8.3 Issues 清單
 
@@ -1692,6 +1695,52 @@ apps/web/
 [chore][layer: frontend]    #146 更新 LIFF /liff/order：傳遞 product_image_links 資料至 ProductGallery
 ```
 
+#### M15 — 訂購人與收貨人資訊
+
+客戶下單時需填寫聯絡資訊，工作室可追蹤收貨地址。取貨方式透過 `requires_address` 旗標控制地址欄位是否顯示與必填。
+
+**關鍵設計決策：**
+- `requires_address` 放在 `pickup_options` 表而非前端寫死，讓老闆可在後台自行設定哪些方式需要地址
+- 「收貨人同訂購人」checkbox 預設勾選，勾選時送出前自動將訂購人資訊複製至收貨人欄位，減少重複輸入
+- `recipient_address` 為 nullable，無地址需求的取貨方式不強制填寫
+- `create_order` DB Function 新增五個參數，直接寫入 `orders` 表，不影響 quota / 庫存邏輯
+- 後台訂單卡片以折疊區塊（預設展開）顯示聯絡資訊，避免卡片過長
+
+**LIFF 流程：**
+```
+商品選擇 → 取貨方式 → 付款方式 → 填寫資料（contact） → 確認送出
+```
+
+`contact` 步驟結構：
+```
+【訂購人資訊】
+  姓名（必填）
+  聯絡電話（必填）
+
+  ☑ 收貨人同訂購人
+
+【收貨人資訊】（若取消勾選才顯示）
+  姓名（必填）
+  電話（必填）
+
+【收貨地址】（僅 requires_address = true 時顯示）
+  地址（必填）
+```
+
+```
+[chore][layer: db]          #150 Migration 012：pickup_options 新增 requires_address boolean not null default false；orders 新增 customer_name、customer_phone、recipient_name、recipient_phone text not null default ''；recipient_address text
+[chore][layer: db]          #151 更新 create_order DB Function：新增 p_customer_name、p_customer_phone、p_recipient_name、p_recipient_phone、p_recipient_address 參數，insert 時帶入 orders 表
+[chore][layer: api]         #152 更新 GET /api/pickup-options：response 含入 requires_address 欄位
+[chore][layer: api]         #153 更新 POST /api/orders：接收 customerName、customerPhone、recipientName、recipientPhone、recipientAddress，傳至 create_order function
+[chore][layer: api]         #154 更新 GET /api/admin/orders：select 含入 customer_name、customer_phone、recipient_name、recipient_phone、recipient_address
+[chore][layer: api]         #155 更新 POST /api/admin/pickup-options：接收 requiresAddress 欄位
+[chore][layer: api]         #156 更新 PATCH /api/admin/pickup-options/:id：接收 requiresAddress 欄位
+[type: feature][layer: frontend] #157 LIFF /liff/order：新增 contact 步驟（訂購人欄位、同收貨人 checkbox、收貨人欄位、地址欄位 — 依 requires_address 顯示）
+[chore][layer: frontend]    #158 更新 LIFF 確認頁：顯示收貨資訊摘要（收貨人姓名、電話、地址）
+[chore][layer: frontend]    #159 更新後台訂單管理頁：order 卡片新增聯絡資訊區塊（訂購人姓名電話、收貨人姓名電話、地址）
+[chore][layer: frontend]    #160 更新後台取貨方式管理頁：新增/編輯表單加入「需要收貨地址」切換
+```
+
 #### M14 — 品牌識別
 
 以 Ditto Cake Logo 的 SVG 路徑取代 GIF 動圖，讓 LIFF 載入頁面改以逐條描繪動畫（`stroke-dashoffset`）呈現品牌 Logo；集中管理站台名稱與描述。
@@ -1758,7 +1807,8 @@ PR body 必填：
 | M12 — 商品圖庫 | 10 | 10 hr |
 | M13 — 多張商品圖片 | 9 | 8 hr |
 | M14 — 品牌識別 | 3 | 4 hr |
-| **總計** | **149** | **~152 hr** |
+| M15 — 訂購人與收貨人資訊 | 11 | 10 hr |
+| **總計** | **160** | **~162 hr** |
 
 單人每週投入約 10~12 小時，八週完成 MVP 是合理目標。
 
