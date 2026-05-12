@@ -25,6 +25,11 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function RolesPage() {
     const [roles, setRoles] = useState<Role[]>([])
     const [allPermissions, setAllPermissions] = useState<Permission[]>([])
@@ -95,7 +100,7 @@ export default function RolesPage() {
                 </div>
                 <Link
                     href="/admin/roles/new"
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold text-white ${btn.solid}`}
                     style={{ backgroundColor: 'var(--color-admin-primary)' }}
                 >
                     新增角色
@@ -119,14 +124,14 @@ export default function RolesPage() {
                                         <button
                                             onClick={() => handleSave(role.id)}
                                             disabled={saving}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                                             style={{ backgroundColor: 'var(--color-admin-primary)' }}
                                         >
                                             {saving ? '儲存中...' : '儲存'}
                                         </button>
                                         <button
                                             onClick={() => setEditingRoleId(null)}
-                                            className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                             style={css.surface}
                                         >
                                             <span style={css.muted}>取消</span>
@@ -135,7 +140,7 @@ export default function RolesPage() {
                                 ) : (
                                     <button
                                         onClick={() => startEdit(role)}
-                                        className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                        className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                         style={css.surface}
                                     >
                                         <span style={css.muted}>編輯權限</span>

@@ -16,6 +16,11 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function ImagesPage() {
     const [images, setImages] = useState<ImageRecord[]>([])
     const [loading, setLoading] = useState(true)
@@ -91,7 +96,7 @@ export default function ImagesPage() {
                 <h1 className="text-xl font-semibold" style={css.text}>圖庫管理</h1>
                 <button
                     onClick={() => setShowUploader(v => !v)}
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold text-white ${btn.solid}`}
                     style={{ backgroundColor: 'var(--color-admin-primary)' }}
                 >
                     {showUploader ? '取消上傳' : '上傳新圖片'}
@@ -155,7 +160,7 @@ export default function ImagesPage() {
                                         <button
                                             onClick={() => handleSaveName(img.id)}
                                             disabled={savingName}
-                                            className="px-2 py-1 rounded text-xs text-white shrink-0 disabled:opacity-50"
+                                            className={`px-2 py-1 rounded text-xs text-white shrink-0 disabled:opacity-50 ${btn.solid}`}
                                             style={{ backgroundColor: 'var(--color-admin-primary)' }}
                                         >
                                             {savingName ? '...' : '儲存'}
@@ -163,7 +168,7 @@ export default function ImagesPage() {
                                     </div>
                                 ) : (
                                     <button
-                                        className="w-full text-left text-xs truncate rounded px-1 py-0.5 hover:bg-gray-100 transition-colors"
+                                        className={`w-full text-left text-xs truncate rounded px-1 py-0.5 hover:bg-gray-100 transition-colors ${btn.surface}`}
                                         style={img.name ? css.text : css.muted}
                                         onClick={() => { setEditingId(img.id); setEditName(img.name ?? '') }}
                                         title="點擊編輯備註名稱"
@@ -174,7 +179,7 @@ export default function ImagesPage() {
 
                                 <button
                                     onClick={() => setDeletingId(img.id)}
-                                    className="w-full text-xs py-1 rounded border transition-colors hover:bg-red-50"
+                                    className={`w-full text-xs py-1 rounded border transition-colors hover:bg-red-50 ${btn.surface}`}
                                     style={{ borderColor: '#FCA5A5', color: '#DC2626' }}
                                 >
                                     刪除
@@ -193,7 +198,7 @@ export default function ImagesPage() {
                     onClick={() => setLightboxUrl(null)}
                 >
                     <button
-                        className="absolute top-4 right-4 text-white text-xl leading-none w-9 h-9 flex items-center justify-center rounded-full"
+                        className={`absolute top-4 right-4 text-white text-xl leading-none w-9 h-9 flex items-center justify-center rounded-full ${btn.surface}`}
                         style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
                         onClick={() => setLightboxUrl(null)}
                     >
@@ -231,14 +236,14 @@ export default function ImagesPage() {
                             <button
                                 onClick={() => handleDelete(deletingId)}
                                 disabled={deleteLoading}
-                                className="flex-1 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50"
+                                className={`flex-1 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                                 style={{ backgroundColor: '#DC2626' }}
                             >
                                 {deleteLoading ? '刪除中...' : '確認刪除'}
                             </button>
                             <button
                                 onClick={() => setDeletingId(null)}
-                                className="flex-1 py-2 rounded-lg text-sm border"
+                                className={`flex-1 py-2 rounded-lg text-sm border ${btn.surface}`}
                                 style={css.surface}
                             >
                                 <span style={css.muted}>取消</span>

@@ -13,6 +13,12 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+    link: 'cursor-pointer transition hover:opacity-70',
+} as const
+
 export default function SettingsPage() {
     const [shopName, setShopName] = useState('')
     const [bankCode, setBankCode] = useState('')
@@ -111,7 +117,7 @@ export default function SettingsPage() {
                     {!editingShop && (
                         <button
                             onClick={() => { setEditShopName(shopName); setEditingShop(true) }}
-                            className="px-3 py-1.5 rounded-lg text-xs border"
+                            className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                             style={css.surface}
                         >
                             <span style={css.muted}>編輯</span>
@@ -133,12 +139,12 @@ export default function SettingsPage() {
                         </div>
                         <div className="flex gap-2">
                             <button type="submit" disabled={savingShop}
-                                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                                className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                                 style={{ backgroundColor: 'var(--color-admin-primary)' }}>
                                 {savingShop ? '儲存中...' : '儲存'}
                             </button>
                             <button type="button" onClick={() => setEditingShop(false)}
-                                className="px-4 py-1.5 rounded-lg text-xs border"
+                                className={`px-4 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                 style={css.surface}>
                                 <span style={css.muted}>取消</span>
                             </button>
@@ -163,7 +169,7 @@ export default function SettingsPage() {
                     {!editingBank && (
                         <button
                             onClick={() => { setEditCode(bankCode); setEditAccount(bankAccount); setEditHolder(bankHolder); setEditingBank(true) }}
-                            className="px-3 py-1.5 rounded-lg text-xs border"
+                            className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                             style={css.surface}
                         >
                             <span style={css.muted}>編輯</span>
@@ -193,12 +199,12 @@ export default function SettingsPage() {
                         </div>
                         <div className="flex gap-2">
                             <button type="submit" disabled={savingBank}
-                                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                                className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                                 style={{ backgroundColor: 'var(--color-admin-primary)' }}>
                                 {savingBank ? '儲存中...' : '儲存'}
                             </button>
                             <button type="button" onClick={() => setEditingBank(false)}
-                                className="px-4 py-1.5 rounded-lg text-xs border"
+                                className={`px-4 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                 style={css.surface}>
                                 <span style={css.muted}>取消</span>
                             </button>

@@ -37,6 +37,11 @@ const css = {
     muted: { color: 'var(--color-admin-muted)' },
 }
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function ImageCropper({ productId, onDone, onCancel, hideLibraryTab = false }: Props) {
     const [tab, setTab] = useState<Tab>('upload')
     const [showLibrary, setShowLibrary] = useState(false)
@@ -112,7 +117,7 @@ export default function ImageCropper({ productId, onDone, onCancel, hideLibraryT
                                 key={t}
                                 type="button"
                                 onClick={() => setTab(t)}
-                                className="flex-1 py-2 text-xs font-medium transition-colors"
+                                className={`flex-1 py-2 text-xs font-medium ${tab === t ? btn.solid : btn.surface}`}
                                 style={tab === t
                                     ? { backgroundColor: 'var(--color-admin-primary)', color: '#fff' }
                                     : css.surface
@@ -167,14 +172,14 @@ export default function ImageCropper({ productId, onDone, onCancel, hideLibraryT
                             <button
                                 onClick={handleUpload}
                                 disabled={!imageSrc || uploading}
-                                className="flex-1 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
+                                className={`flex-1 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40 ${btn.solid}`}
                                 style={{ backgroundColor: 'var(--color-admin-primary)' }}
                             >
                                 {uploading ? '上傳中...' : '確認上傳'}
                             </button>
                             <button
                                 onClick={onCancel}
-                                className="px-4 py-2 rounded-lg text-sm border"
+                                className={`px-4 py-2 rounded-lg text-sm border ${btn.surface}`}
                                 style={css.surface}
                             >
                                 <span style={css.muted}>取消</span>
@@ -186,14 +191,14 @@ export default function ImageCropper({ productId, onDone, onCancel, hideLibraryT
                         <button
                             type="button"
                             onClick={() => setShowLibrary(true)}
-                            className="w-full py-10 border-2 border-dashed rounded-xl text-sm font-medium transition-colors hover:border-blue-400"
+                            className={`w-full py-10 border-2 border-dashed rounded-xl text-sm font-medium hover:border-blue-400 ${btn.surface}`}
                             style={{ borderColor: 'var(--color-admin-border)', color: 'var(--color-admin-primary)' }}
                         >
                             開啟圖庫
                         </button>
                         <button
                             onClick={onCancel}
-                            className="w-full py-2 rounded-lg text-sm border"
+                            className={`w-full py-2 rounded-lg text-sm border ${btn.surface}`}
                             style={css.surface}
                         >
                             <span style={css.muted}>取消</span>

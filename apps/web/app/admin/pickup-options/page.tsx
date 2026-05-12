@@ -25,6 +25,11 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function PickupOptionsPage() {
     const [options, setOptions] = useState<PickupOption[]>([])
     const [dataLoaded, setDataLoaded] = useState(false)
@@ -90,7 +95,7 @@ export default function PickupOptionsPage() {
                 </div>
                 <Link
                     href="/admin/pickup-options/new"
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white cursor-pointer"
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold text-white ${btn.solid}`}
                     style={{ backgroundColor: 'var(--color-admin-primary)' }}
                 >
                     新增取貨方式
@@ -144,10 +149,10 @@ export default function PickupOptionsPage() {
                                     </label>
                                     <div className="flex gap-2">
                                         <button type="submit"
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
                                             style={{ backgroundColor: 'var(--color-admin-primary)' }}>儲存</button>
                                         <button type="button" onClick={() => setEditState(null)}
-                                            className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                             style={css.surface}>
                                             <span style={css.muted}>取消</span>
                                         </button>
@@ -194,13 +199,13 @@ export default function PickupOptionsPage() {
                                                 bankOnly: opt.allowed_payment_methods !== null,
                                                 requiresAddress: opt.requires_address,
                                             })}
-                                            className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                             style={css.surface}>
                                             <span style={css.muted}>編輯</span>
                                         </button>
                                         <button
                                             onClick={() => handleToggle(opt.id)}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
                                             style={opt.is_active
                                                 ? { backgroundColor: '#FEE2E2', color: '#991B1B' }
                                                 : { backgroundColor: '#DCFCE7', color: '#166534' }

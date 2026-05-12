@@ -57,6 +57,16 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+// Reusable button class fragments
+const btn = {
+    // Solid colored buttons (primary, green, red)
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    // Surface / border buttons (light background)
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+    // Inline text link buttons
+    link: 'cursor-pointer transition hover:opacity-70',
+} as const
+
 const PAGE_LIMIT = 20
 
 export default function AdminDashBoard() {
@@ -193,7 +203,7 @@ export default function AdminDashBoard() {
                 <button
                     onClick={() => fetchOrders(page)}
                     disabled={loading}
-                    className="text-sm px-4 py-2 rounded-lg border cursor-pointer disabled:opacity-50"
+                    className={`text-sm px-4 py-2 rounded-lg border disabled:opacity-50 ${btn.surface}`}
                     style={css.surface}
                 >
                     <span style={css.muted}>重新整理</span>
@@ -244,7 +254,7 @@ export default function AdminDashBoard() {
                 {hasFilter && (
                     <button
                         onClick={() => { setFilterStatus(''); setFilterSessionId(''); setFilterProductId('') }}
-                        className="text-xs px-3 py-1 rounded-lg border cursor-pointer"
+                        className={`text-xs px-3 py-1 rounded-lg border ${btn.surface}`}
                         style={css.surface}
                     >
                         <span style={css.muted}>清除篩選</span>
@@ -305,28 +315,28 @@ export default function AdminDashBoard() {
                                 <div className="shrink-0 flex gap-3 flex-wrap">
                                     {order.status === 'pending' && (<>
                                         <button onClick={() => handleAction(order.id, 'accept')}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
                                             style={{ backgroundColor: 'var(--color-admin-primary)' }}>接單</button>
                                         <button onClick={() => setActionState({ orderId: order.id, action: 'reject', reason: '' })}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
                                             style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>拒絕</button>
                                     </>)}
                                     {order.status === 'in_production' && (<>
                                         <button onClick={() => handleAction(order.id, 'ready')}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
                                             style={{ backgroundColor: '#16A34A' }}>製作完成</button>
                                         <button onClick={() => setActionState({ orderId: order.id, action: 'cancel', reason: '' })}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
                                             style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>取消</button>
                                     </>)}
                                     {order.status === 'pending_payment' && order.payment_method === 'cash' && (
                                         <button onClick={() => handleAction(order.id, 'confirm-payment')}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
                                             style={{ backgroundColor: '#16A34A' }}>確認收現</button>
                                     )}
                                     {order.status === 'payment_submitted' && (
                                         <button onClick={() => handleAction(order.id, 'confirm-payment')}
-                                            className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
                                             style={{ backgroundColor: '#16A34A' }}>確認付款</button>
                                     )}
                                 </div>
@@ -349,10 +359,10 @@ export default function AdminDashBoard() {
                                             handleAction(actionState.orderId, actionState.action, { reason: actionState.reason })
                                             setActionState(null)
                                         }}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
                                         style={{ backgroundColor: '#DC2626' }}>確認</button>
                                     <button onClick={() => setActionState(null)}
-                                        className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                        className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                         style={css.surface}>取消</button>
                                 </div>
                             )}
@@ -396,13 +406,13 @@ export default function AdminDashBoard() {
                                         <button
                                             onClick={() => saveAdminNote(order.id)}
                                             disabled={adminNoteSaving === order.id}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0 disabled:opacity-50 cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0 disabled:opacity-50 ${btn.solid}`}
                                             style={css.primary}>
                                             {adminNoteSaving === order.id ? '儲存中...' : '儲存'}
                                         </button>
                                         <button
                                             onClick={() => setAdminNoteEditing(null)}
-                                            className="px-3 py-1.5 rounded-lg text-xs border shrink-0 cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs border shrink-0 ${btn.surface}`}
                                             style={css.surface}>取消</button>
                                     </div>
                                 ) : (
@@ -416,7 +426,7 @@ export default function AdminDashBoard() {
                                                 setAdminNoteInputs(prev => ({ ...prev, [order.id]: order.admin_note ?? '' }))
                                                 setAdminNoteEditing(order.id)
                                             }}
-                                            className="text-xs underline underline-offset-2 shrink-0 cursor-pointer"
+                                            className={`text-xs underline underline-offset-2 shrink-0 ${btn.link}`}
                                             style={{ color: 'var(--color-admin-primary)' }}>
                                             {order.admin_note ? '編輯' : '新增'}
                                         </button>

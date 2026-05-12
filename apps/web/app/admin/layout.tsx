@@ -45,11 +45,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         <Link
                             key={item.href}
                             href={item.href}
-                            className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                            className={`shrink-0 px-3 py-1.5 rounded-full text-xs transition-colors ${isActive
+                                ? 'font-semibold'
+                                : 'font-normal text-[var(--color-admin-muted)] hover:bg-gray-100 hover:text-gray-600'
+                            }`}
                             style={{
-                                backgroundColor: isActive ? 'var(--color-admin-sidebar-active)' : 'transparent',
-                                color: isActive ? 'var(--color-admin-primary)' : 'var(--color-admin-muted)',
-                                fontWeight: isActive ? 600 : 400,
+                                backgroundColor: isActive ? 'var(--color-admin-sidebar-active)' : undefined,
+                                color: isActive ? 'var(--color-admin-primary)' : undefined,
                             }}
                         >
                             {item.label}
@@ -78,11 +80,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className="flex items-center px-4 py-2 text-sm transition-colors"
+                                className={`flex items-center px-4 py-2 text-sm transition-colors ${isActive
+                                    ? 'font-semibold'
+                                    : 'font-normal text-[var(--color-admin-muted)] hover:bg-gray-100 hover:text-gray-600'
+                                }`}
                                 style={{
-                                    backgroundColor: isActive ? 'var(--color-admin-sidebar-active)' : 'transparent',
-                                    color: isActive ? 'var(--color-admin-primary)' : 'var(--color-admin-muted)',
-                                    fontWeight: isActive ? 600 : 400,
+                                    backgroundColor: isActive ? 'var(--color-admin-sidebar-active)' : undefined,
+                                    color: isActive ? 'var(--color-admin-primary)' : undefined,
                                 }}
                             >
                                 {item.label}

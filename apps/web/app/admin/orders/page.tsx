@@ -64,6 +64,11 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 const LIMIT = 20
 
 export default function OrderHistoryPage() {
@@ -244,7 +249,7 @@ export default function OrderHistoryPage() {
                     <button
                         onClick={handleExport}
                         disabled={!searched || loading}
-                        className="px-4 py-2 rounded-lg text-sm border disabled:opacity-40 cursor-pointer"
+                        className={`px-4 py-2 rounded-lg text-sm border disabled:opacity-40 ${btn.surface}`}
                         style={css.surface}
                     >
                         <span style={css.muted}>匯出 CSV</span>
@@ -252,7 +257,7 @@ export default function OrderHistoryPage() {
                     <button
                         onClick={handleSearch}
                         disabled={loading}
-                        className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                         style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
                         {loading ? '查詢中...' : '查詢'}
@@ -290,7 +295,7 @@ export default function OrderHistoryPage() {
                                 {/* Summary row — click to toggle detail */}
                                 <button
                                     onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                                    className="w-full text-left p-4 flex flex-wrap md:flex-nowrap items-center gap-3"
+                                    className={`w-full text-left p-4 flex flex-wrap md:flex-nowrap items-center gap-3 ${btn.surface}`}
                                 >
                                     {/* Status badge */}
                                     <div className="shrink-0">
