@@ -13,6 +13,7 @@ type PickupOption = {
     description: string | null
     extra_fee: number
     allowed_payment_methods: string[] | null
+    requires_address: boolean
     is_active: boolean
     sort_order: number
 }
@@ -30,7 +31,7 @@ export default function PickupOptionsPage() {
     const [error, setError] = useState<string | null>(null)
 
     const [editState, setEditState] = useState<{
-        id: string; name: string; description: string; extraFee: string; bankOnly: boolean
+        id: string; name: string; description: string; extraFee: string; bankOnly: boolean; requiresAddress: boolean
     } | null>(null)
 
     const { combine } = useMinLoading(1000)
@@ -61,6 +62,7 @@ export default function PickupOptionsPage() {
                 description: editState.description || null,
                 extraFee: Number(editState.extraFee) || 0,
                 allowedPaymentMethods: editState.bankOnly ? ['bank_transfer'] : null,
+                requiresAddress: editState.requiresAddress,
             }),
         })
         if (res.ok) {
@@ -134,6 +136,12 @@ export default function PickupOptionsPage() {
                                             className="accent-blue-600" />
                                         <span style={css.text}>僅限銀行匯款</span>
                                     </label>
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" checked={editState.requiresAddress}
+                                            onChange={e => setEditState({ ...editState, requiresAddress: e.target.checked })}
+                                            className="accent-blue-600" />
+                                        <span style={css.text}>需要填寫收貨地址</span>
+                                    </label>
                                     <div className="flex gap-2">
                                         <button type="submit"
                                             className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
@@ -163,6 +171,12 @@ export default function PickupOptionsPage() {
                                                     僅限匯款
                                                 </span>
                                             )}
+                                            {opt.requires_address && (
+                                                <span className="text-xs px-2.5 py-1 rounded-full font-medium"
+                                                    style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>
+                                                    需填地址
+                                                </span>
+                                            )}
                                         </div>
                                         {opt.description && (
                                             <p className="text-xs mt-0.5" style={css.muted}>{opt.description}</p>
@@ -178,6 +192,7 @@ export default function PickupOptionsPage() {
                                                 description: opt.description ?? '',
                                                 extraFee: String(opt.extra_fee),
                                                 bankOnly: opt.allowed_payment_methods !== null,
+                                                requiresAddress: opt.requires_address,
                                             })}
                                             className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
                                             style={css.surface}>

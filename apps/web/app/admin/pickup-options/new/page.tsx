@@ -18,6 +18,7 @@ export default function NewPickupOptionPage() {
     const [description, setDescription] = useState('')
     const [extraFee, setExtraFee] = useState('')
     const [bankOnly, setBankOnly] = useState(false)
+    const [requiresAddress, setRequiresAddress] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -33,6 +34,7 @@ export default function NewPickupOptionPage() {
                     description: description || null,
                     extraFee: Number(extraFee) || 0,
                     allowedPaymentMethods: bankOnly ? ['bank_transfer'] : null,
+                    requiresAddress,
                 }),
             })
             const body = await res.json()
@@ -106,6 +108,16 @@ export default function NewPickupOptionPage() {
                             className="accent-blue-600"
                         />
                         <span style={css.text}>僅限銀行匯款</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={requiresAddress}
+                            onChange={e => setRequiresAddress(e.target.checked)}
+                            className="accent-blue-600"
+                        />
+                        <span style={css.text}>需要填寫收貨地址</span>
                     </label>
 
                     {error && <p className="text-xs" style={{ color: '#DC2626' }}>{error}</p>}

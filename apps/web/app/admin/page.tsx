@@ -19,6 +19,11 @@ type Order = {
     created_at: string
     customer_note: string | null
     admin_note: string | null
+    customer_name: string
+    customer_phone: string
+    recipient_name: string
+    recipient_phone: string
+    recipient_address: string | null
     order_items: {
         product_id: string
         quantity: number
@@ -352,7 +357,25 @@ export default function AdminDashBoard() {
                                 </div>
                             )}
 
-                            {/* 備註區 */}
+                            {/* Contact info */}
+                            <div className="px-4 pb-3 border-t pt-3 grid grid-cols-2 gap-x-4 gap-y-1" style={css.border}>
+                                <div>
+                                    <p className="text-xs font-semibold mb-0.5" style={css.muted}>訂購人</p>
+                                    <p className="text-xs" style={css.text}>{order.customer_name}</p>
+                                    <p className="text-xs" style={css.muted}>{order.customer_phone}</p>
+                                    <p className="text-xs mt-0.5" style={{ color: '#06B6D4' }}>LINE名稱：{order.line_display_name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-semibold mb-0.5" style={css.muted}>收貨人</p>
+                                    <p className="text-xs" style={css.text}>{order.recipient_name}</p>
+                                    <p className="text-xs" style={css.muted}>{order.recipient_phone}</p>
+                                    {order.recipient_address && (
+                                        <p className="text-xs mt-0.5" style={css.muted}>{order.recipient_address}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Notes */}
                             <div className="px-4 pb-4 border-t pt-3 space-y-2" style={css.border}>
                                 {order.customer_note && (
                                     <p className="text-xs" style={css.muted}>
