@@ -49,7 +49,12 @@ async function createTestOrder() {
         p_display_name:     'test_user',
         p_items:            [{ product_id: PRODUCT_ID, quantity: 2 }],
         p_pickup_option_id: PICKUP_OPTION_ID,
-        p_payment_method:   'bank_transfer',
+            p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
     })
     if (error) throw new Error(error.message)
     return orderId as string

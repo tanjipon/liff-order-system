@@ -21,10 +21,10 @@ export async function POST(req: NextRequest) {
             p_items:                items,
             p_pickup_option_id:     pickupOptionId,
             p_payment_method:       paymentMethod,
-            p_customer_name:        customerName,
-            p_customer_phone:       customerPhone,
-            p_recipient_name:       recipientName,
-            p_recipient_phone:      recipientPhone,
+            p_customer_name:        customerName ?? '',
+            p_customer_phone:       customerPhone ?? '',
+            p_recipient_name:       recipientName ?? '',
+            p_recipient_phone:      recipientPhone ?? '',
             p_recipient_address:    recipientAddress ?? null,
         })
 
