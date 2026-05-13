@@ -1,0 +1,56 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main      # → Vercel Production
+      - feature   # → Vercel Preview (demo)
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deploy target'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview   # demo
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine deploy target
+        id: target
+        run: |
+          # workflow_dispatch 優先使用手動選擇
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.environment }}" = "production" ]; then
+              echo "prod=true" >> $GITHUB_OUTPUT
+              echo "label=Production" >> $GITHUB_OUTPUT
+            else
+              echo "prod=false" >> $GITHUB_OUTPUT
+              echo "label=Preview (demo)" >> $GITHUB_OUTPUT
+            fi
+          # push 事件依 branch 判斷
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "prod=true" >> $GITHUB_OUTPUT
+            echo "label=Production" >> $GITHUB_OUTPUT
+          else
+            echo "prod=false" >> $GITHUB_OUTPUT
+            echo "label=Preview (demo)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to Vercel (${{ steps.target.outputs.label }})
+        run: |
+          if [ "${{ steps.target.outputs.prod }}" = "true" ]; then
+            npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+          else
+            npx vercel --token=${{ secrets.VERCEL_TOKEN }} --yes
+          fi
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

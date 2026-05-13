@@ -1,0 +1,54 @@
+name: DB Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * *'  # 每天 UTC 18:00 = 台灣 02:00
+  workflow_dispatch:        # 允許手動觸發（版本更新前使用）
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y postgresql-client
+
+      - name: Set backup filename
+        id: filename
+        run: echo "name=backup-$(date +%Y%m%d-%H%M).dump" >> $GITHUB_OUTPUT
+
+      - name: Dump database
+        run: |
+          pg_dump "${{ secrets.PROD_DB_URL }}" \
+            --no-owner \
+            --no-acl \
+            --format=custom \
+            -f ${{ steps.filename.outputs.name }}
+
+      - name: Upload to R2
+        run: |
+          curl --fail -X PUT \
+            "${{ secrets.R2_ENDPOINT }}/${{ secrets.R2_BUCKET_NAME }}/backups/${{ steps.filename.outputs.name }}" \
+            --aws-sigv4 "aws:amz:auto:s3" \
+            --user "${{ secrets.R2_ACCESS_KEY_ID }}:${{ secrets.R2_SECRET_ACCESS_KEY }}" \
+            --upload-file ${{ steps.filename.outputs.name }}
+        env:
+          # R2_ENDPOINT 格式: https://[account-id].r2.cloudflarestorage.com
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+      - name: Upload as GitHub artifact (30 day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: "*.dump"
+          retention-days: 30
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::DB backup failed! Check PROD_DB_URL and R2 secrets."
