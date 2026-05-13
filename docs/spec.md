@@ -1,6 +1,6 @@
 # 甜點工作室訂購系統規格書
 
-**版本：** v1.10  
+**版本：** v1.11  
 **最後更新：** 2026-05  
 **性質：** 個人工作室，非正式公司
 
@@ -15,6 +15,8 @@
 **v1.7 異動說明：** 新增系統設定規格。新增 `settings` 表（key-value，含 `is_public`）；匯款帳號資訊（`bank_code`、`bank_account`、`bank_holder`）從環境變數移至 DB；新增後台設定頁（`/admin/settings`）；新增公開設定 API（`GET /api/settings/public`）；移除 `NEXT_PUBLIC_BANK_*` 環境變數；新增 M11 Milestone。
 
 **v1.8 異動說明：** 新增商品圖庫與多張商品圖片規格。`product_images` 表（圖片庫）；Cloudflare R2 存放圖片；上傳時自動存入圖庫；可從圖庫選擇圖片；後台 `/admin/images` 圖庫管理頁；`product_image_links` 多對多表支援每個商品關聯多張圖片；LIFF 選購頁展示多圖 Slide；新增 M12、M13 Milestone。
+
+**v1.11 異動說明：** 新增 M16 UI 互動優化與詳情展示規格。後台所有按鈕新增 hover/active 視覺回饋（亮度變化）；Sidebar inactive 連結 hover 顯示灰色底；`ImageCropper` 按鈕同步補齊；後台歷史訂單頁點擊列可展開詳細資訊（accordion）；LIFF 訂單詳情頁新增取貨方式卡片；`LiffLoader` 動畫由 stroke-dashoffset 改為依序彈跳（fill-based）。
 
 **v1.10 異動說明：** 新增訂購人與收貨人資訊規格。`orders` 表新增 `customer_name`、`customer_phone`、`recipient_name`、`recipient_phone`、`recipient_address` 五個欄位；`pickup_options` 新增 `requires_address` 旗標控制地址是否必填；LIFF 訂購流程新增「填寫資料」步驟，支援「收貨人同訂購人」快速帶入；後台訂單卡片展示完整聯絡與收貨資訊；新增 M15 Milestone。
 
@@ -425,7 +427,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 - 製作中列表：可標記完成、可取消
 - 待付款列表：可確認收款、可取消
 - 確認付款中列表：可確認收款
-- 每筆訂單卡片可展開查看訂購人姓名、電話，以及收貨人姓名、電話、地址（有填才顯示）
+- 每筆訂單卡片可展開查看取貨方式、訂購人姓名、電話，以及收貨人姓名、電話、地址（有填才顯示）
 
 ### 7.2 歷史訂單查詢
 
@@ -437,6 +439,8 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 - 日期區間（依 `created_at`）
 
 **列表欄位：** 訂單編號、建立時間、LINE 名稱、品項摘要、金額、狀態、取消原因
+
+**可展開詳細資訊（accordion）：** 點擊任一列展開，顯示訂購商品與數量、取貨方式、付款方式、訂購人與收貨人聯絡資訊、客人備注、店家備注
 
 **匯出：** 依目前篩選條件匯出 CSV
 
@@ -660,6 +664,7 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 | 第十三週 | 多張商品圖片（product_image_links、ProductImageStrip、LIFF 多圖 Slide） | 每個商品展示多張圖片 |
 | 第十四週 | 品牌識別（LiffLoader SVG 動畫、config/site.ts、Favicon） | 一致的品牌視覺體驗 |
 | 第十五週 | 訂購人與收貨人資訊（orders 新欄位、pickup_options.requires_address、LIFF 填寫資料步驟、後台顯示） | 工作室可追蹤客戶聯絡資訊與收貨地址 |
+| 第十六週 | UI 互動優化（後台所有按鈕 hover/active、Sidebar hover、歷史訂單 accordion 詳情、訂單管理取貨方式顯示、LIFF 訂單詳情取貨方式、LiffLoader 彈跳動畫） | 整體互動體驗提升，操作回饋感更清晰 |
 
 ---
 
@@ -719,21 +724,24 @@ pending_payment → cancelled           （老闆取消，兩種付款方式皆�
 - **手機佈局**：Sidebar 收合，改以頂部導覽列（橫向捲動）呈現
 - **Sidebar 導覽項目**：訂單管理 / 開單管理 / 歷史訂單 / 取貨方式 / 人員管理 / 角色權限
 - **Active 狀態**：以 `--color-admin-sidebar-active` 背景 + 圓角 pill 標示當前頁面
+- **Sidebar hover**：inactive 連結 hover 時顯示 `gray-100` 底色、`gray-600` 文字；active 連結不受影響
+- **按鈕互動回饋**：所有可點擊按鈕（含 Link 元素）套用 `hover:brightness-90/95`、`active:brightness-75/90`；disabled 狀態排除 hover 效果（`disabled:hover:brightness-100`）
 - **載入動畫**：SVG spinner（`animate-spin`），支援全版頁面（`min-h-screen` 居中）與 inline 兩種模式
 
-### 11.5 LIFF 載入動畫規格（SVG，M14 更新）
+### 11.5 LIFF 載入動畫規格（SVG，M16 更新）
 
-**v1.9 更新：** GIF 動圖改為 SVG `stroke-dashoffset` 路徑描繪動畫，使用 Ditto Cake Logo（19 條路徑）。
+**v1.11 更新（M16）：** 動畫由 stroke-dashoffset 描繪改為依序彈跳，路徑以 fill 顯示，19 個圖形依波段 delay 順序逐一彈跳，視覺更俏皮活潑。
 
 | 項目 | 規格 |
 |------|------|
 | 元件 | `components/liff/LiffLoader.tsx` |
-| 動畫方式 | CSS `stroke-dashoffset`（`DASHARRAY=6000`，0→6000 反向描繪） |
+| 動畫方式 | CSS `@keyframes liff-bounce`（`translateY` 0 → −34px → 0 → −17px → 0 → −8px → 0） |
 | 路徑數量 | 19 條 SVG path |
 | 波段分組 | Wave 1（頂部插圖，0–200ms）/ Wave 2（人物，400–520ms）/ Wave 3（文字，720–1280ms） |
-| 週期 | 4200ms（`key={cycle}` + `setInterval` 強制 re-mount 實現無限循環） |
-| 淡出 | `@keyframes liff-fade-out`（68%–90% 淡出，100% 結束後由下一個 cycle 接續） |
-| 線條 | `strokeWidth="8"`，`stroke="var(--color-liff-primary)"`，`fill="none"` |
+| 週期 | 4200ms（`key={cycle}` + `setInterval` 強制 re-mount） |
+| 填色 | `fill="var(--color-liff-primary)"`，`transformBox: fill-box`，`transformOrigin: center` |
+
+**v1.9 更新（M14）：** GIF 動圖改為 SVG `stroke-dashoffset` 路徑描繪動畫（已於 M16 取代）。
 
 **原 GIF 動圖規格（已棄用，M10 設計，M14 取代）：**
 

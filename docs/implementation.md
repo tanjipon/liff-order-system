@@ -1,8 +1,10 @@
 # 甜點工作室訂購系統｜實作細節與 GitHub Project 規劃
 
-**版本：** v1.13  
-**依據：** dessert-shop-spec.md v1.9  
+**版本：** v1.14  
+**依據：** dessert-shop-spec.md v1.11  
 **原則：** 最佳軟體工程實踐、單人開發、零成本部署
+
+**v1.14 異動說明：** 新增 UI 互動優化與詳情展示功能。後台 14 個頁面與 `ImageCropper` 元件新增 `btn` 常數（solid / surface）統一 hover/active 效果；Sidebar inactive 連結新增 `hover:bg-gray-100 hover:text-gray-600`；後台歷史訂單頁新增 accordion 展開詳情（品項、取貨、付款、聯絡、備注）；後台訂單管理頁聯絡資訊區塊新增取貨方式顯示；API `GET /api/admin/orders` 補充 `pickup_fee`、`pickup_options(name)`；`GET /api/orders/:id` 補充聯絡資訊與 `pickup_options(name, description)`；LIFF 訂單詳情頁新增取貨方式卡片；`LiffLoader` 動畫由 stroke-dashoffset 改為依序彈跳（fill-based `translateY` bounce）。新增 M16 Milestone。
 
 **v1.13 異動說明：** 新增訂購人與收貨人資訊功能。`pickup_options` 新增 `requires_address boolean`；`orders` 新增 `customer_name`、`customer_phone`、`recipient_name`、`recipient_phone`、`recipient_address` 五個欄位；`create_order` DB Function 新增對應參數；`POST /api/orders` 接收新欄位；LIFF 訂購流程新增 `contact` 步驟（含「收貨人同訂購人」checkbox，`requires_address` 控制地址欄位顯示）；後台訂單卡片展示訂購人與收貨人資訊；後台取貨方式管理新增 `requires_address` 切換。新增 M15 Milestone。
 
@@ -1745,17 +1747,39 @@ apps/web/
 
 以 Ditto Cake Logo 的 SVG 路徑取代 GIF 動圖，讓 LIFF 載入頁面改以逐條描繪動畫（`stroke-dashoffset`）呈現品牌 Logo；集中管理站台名稱與描述。
 
-**關鍵設計：**
+> **注意：** `LiffLoader` 動畫於 M16 進一步更新為依序彈跳（fill-based），`stroke-dashoffset` 設計已取代。`config/site.ts` 與 Favicon 設定維持不變。
+
+**關鍵設計（M14 原始）：**
 - `DASHARRAY=6000`，`@keyframes liff-draw`（dashoffset 6000→0）
 - 19 條路徑分 3 波錯開（Wave 1: 0–200ms，Wave 2: 400–520ms，Wave 3: 720–1280ms），總週期 4200ms
-- `key={cycle}` 強制 React re-mount 實現無限循環（每 4.2s 觸發）
-- `@keyframes liff-fade-out`（0%→68%=1, 90%→100%=0）讓整體在淡出後循環
 - `config/site.ts` 匯出 `siteConfig`（name, description），`app/layout.tsx` 引用
 
 ```
 [type: feature][layer: frontend] #147 更新 components/liff/LiffLoader.tsx：內嵌 Ditto Cake SVG 19 條路徑，stroke-dashoffset 動畫（3 波錯開，4.2s 循環）
 [chore][layer: frontend]    #148 新增 config/site.ts：siteConfig（name: 'Ditto Cake', description: '手作甜點工作室'）
 [chore][layer: frontend]    #149 更新 app/layout.tsx：引用 siteConfig 作為 metadata 來源；加入 apple-touch-icon / favicon link tags
+```
+
+#### M16 — UI 互動優化與詳情展示
+
+後台所有可點擊元素補齊 hover/active 視覺回饋；歷史訂單頁新增 accordion 展開詳情；LIFF 訂單詳情頁補充取貨方式資訊；`LiffLoader` 改為依序彈跳動畫。
+
+**關鍵設計：**
+- 每個 admin 頁面定義 `const btn = { solid, surface }` 常數，以 Tailwind `hover:brightness-*` / `active:brightness-*` 套用，`disabled:hover:brightness-100` 排除 disabled 狀態
+- Sidebar inactive link 以 Tailwind `hover:bg-gray-100 hover:text-gray-600` 控制（避免 inline style 覆蓋問題）
+- 歷史訂單 accordion：`expandedId: string | null` state，點擊列展開品項、取貨+付款（2 欄）、聯絡（2 欄）、備注區塊
+- `LiffLoader` 改為 `@keyframes liff-bounce`（`translateY` 0→-34px→0→-17px→0→-8px→0）；`transformBox: fill-box`、`transformOrigin: center` 確保每個圖形從自身中心彈跳；19 個路徑依原有 delay 依序觸發，週期 4200ms 重播
+
+```
+[chore][layer: frontend]    #161 Admin：為 14 個後台頁面統一新增 btn 常數（solid/surface），套用 hover/active/disabled Tailwind class
+[chore][layer: frontend]    #162 Admin：ImageCropper 補齊 btn 常數與 hover/active 效果
+[chore][layer: frontend]    #163 Admin：Sidebar inactive 連結新增 hover:bg-gray-100 hover:text-gray-600
+[chore][layer: api]         #164 更新 GET /api/admin/orders：select 補充 pickup_fee、pickup_options(name)
+[type: feature][layer: frontend] #165 Admin：歷史訂單頁新增 accordion 展開詳情（品項、取貨+付款、聯絡資訊、備注）
+[chore][layer: api]         #166 更新 GET /api/orders/:id：select 補充 customer_name、customer_phone、recipient_name、recipient_phone、recipient_address、pickup_options(name, description)
+[chore][layer: frontend]    #167 LIFF 訂單詳情頁 /liff/orders/:id：新增取貨方式卡片（name + description）
+[type: feature][layer: frontend] #168 更新 LiffLoader：動畫改為依序彈跳（fill-based，@keyframes liff-bounce，translateY，4200ms 週期重播）
+[chore][layer: frontend]    #169 Admin 訂單管理頁：聯絡資訊區塊新增取貨方式一行顯示（pickup_options.name，API 已有此欄位）
 ```
 
 **Board View 欄位（Kanban）：**
@@ -1808,7 +1832,8 @@ PR body 必填：
 | M13 — 多張商品圖片 | 9 | 8 hr |
 | M14 — 品牌識別 | 3 | 4 hr |
 | M15 — 訂購人與收貨人資訊 | 11 | 10 hr |
-| **總計** | **160** | **~162 hr** |
+| M16 — UI 互動優化與詳情展示 | 9 | 8 hr |
+| **總計** | **169** | **~170 hr** |
 
 單人每週投入約 10~12 小時，八週完成 MVP 是合理目標。
 
