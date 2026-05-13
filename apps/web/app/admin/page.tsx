@@ -24,6 +24,7 @@ type Order = {
     recipient_name: string
     recipient_phone: string
     recipient_address: string | null
+    pickup_options: { name: string } | null
     order_items: {
         product_id: string
         quantity: number
@@ -270,179 +271,186 @@ export default function AdminDashBoard() {
                 </div>
             ) : (
                 <>
-                <div className="space-y-3">
-                    {orders.map((order) => (
-                        <div key={order.id}
-                            className="rounded-xl border overflow-hidden"
-                            style={css.surface}>
+                    <div className="space-y-3">
+                        {orders.map((order) => (
+                            <div key={order.id}
+                                className="rounded-xl border overflow-hidden"
+                                style={css.surface}>
 
-                            {/* 主要資訊列 */}
-                            <div className="p-4 flex flex-wrap md:flex-nowrap items-center gap-3">
+                                {/* 主要資訊列 */}
+                                <div className="p-4 flex flex-wrap md:flex-nowrap items-center gap-3">
 
-                                {/* 狀態 */}
-                                <div className="shrink-0">
-                                    <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                                        style={STATUS_STYLE[order.status]}>
-                                        {STATUS_LABEL[order.status]}
-                                    </span>
-                                </div>
-
-                                {/* 客戶 + 品項 */}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="font-semibold text-sm" style={css.text}>{order.line_display_name}</p>
-                                        {order.queue_number && (
-                                            <span className="text-xs font-mono font-semibold"
-                                                style={{ color: 'var(--color-admin-primary)' }}>#{order.queue_number}</span>
-                                        )}
-                                        <span className="text-xs" style={css.muted}>
-                                            {new Date(order.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
+                                    {/* 狀態 */}
+                                    <div className="shrink-0">
+                                        <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
+                                            style={STATUS_STYLE[order.status]}>
+                                            {STATUS_LABEL[order.status]}
                                         </span>
                                     </div>
-                                    <p className="text-sm mt-0.5 truncate" style={css.muted}>
-                                        {order.order_items.map(i => `${i.products.name}×${i.quantity}`).join('、')}
-                                    </p>
-                                    <p className="text-sm font-bold" style={css.text}>NT$ {order.total_amount}</p>
-                                    {order.payment_method === 'bank_transfer' && order.remit_last5 && (
-                                        <span className="text-xs px-2 py-0.5 rounded-full"
-                                            style={{ backgroundColor: '#EDE9FE', color: '#5B21B6' }}>
-                                            後五碼 {order.remit_last5}
-                                        </span>
-                                    )}
+
+                                    {/* 客戶 + 品項 */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="font-semibold text-sm" style={css.text}>{order.line_display_name}</p>
+                                            {order.queue_number && (
+                                                <span className="text-xs font-mono font-semibold"
+                                                    style={{ color: 'var(--color-admin-primary)' }}>#{order.queue_number}</span>
+                                            )}
+                                            <span className="text-xs" style={css.muted}>
+                                                {new Date(order.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm mt-0.5 truncate" style={css.muted}>
+                                            {order.order_items.map(i => `${i.products.name}×${i.quantity}`).join('、')}
+                                        </p>
+                                        <p className="text-sm font-bold" style={css.text}>NT$ {order.total_amount}</p>
+                                        {order.payment_method === 'bank_transfer' && order.remit_last5 && (
+                                            <span className="text-xs px-2 py-0.5 rounded-full"
+                                                style={{ backgroundColor: '#EDE9FE', color: '#5B21B6' }}>
+                                                後五碼 {order.remit_last5}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* 操作按鈕 */}
+                                    <div className="shrink-0 flex gap-3 flex-wrap">
+                                        {order.status === 'pending' && (<>
+                                            <button onClick={() => handleAction(order.id, 'accept')}
+                                                className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
+                                                style={{ backgroundColor: 'var(--color-admin-primary)' }}>接單</button>
+                                            <button onClick={() => setActionState({ orderId: order.id, action: 'reject', reason: '' })}
+                                                className={`px-4 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
+                                                style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>拒絕</button>
+                                        </>)}
+                                        {order.status === 'in_production' && (<>
+                                            <button onClick={() => handleAction(order.id, 'ready')}
+                                                className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
+                                                style={{ backgroundColor: '#16A34A' }}>製作完成</button>
+                                            <button onClick={() => setActionState({ orderId: order.id, action: 'cancel', reason: '' })}
+                                                className={`px-4 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
+                                                style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>取消</button>
+                                        </>)}
+                                        {order.status === 'pending_payment' && order.payment_method === 'cash' && (
+                                            <button onClick={() => handleAction(order.id, 'confirm-payment')}
+                                                className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
+                                                style={{ backgroundColor: '#16A34A' }}>確認收現</button>
+                                        )}
+                                        {order.status === 'payment_submitted' && (
+                                            <button onClick={() => handleAction(order.id, 'confirm-payment')}
+                                                className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
+                                                style={{ backgroundColor: '#16A34A' }}>確認付款</button>
+                                        )}
+                                    </div>
                                 </div>
 
-                                {/* 操作按鈕 */}
-                                <div className="shrink-0 flex gap-3 flex-wrap">
-                                    {order.status === 'pending' && (<>
-                                        <button onClick={() => handleAction(order.id, 'accept')}
-                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
-                                            style={{ backgroundColor: 'var(--color-admin-primary)' }}>接單</button>
-                                        <button onClick={() => setActionState({ orderId: order.id, action: 'reject', reason: '' })}
-                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
-                                            style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>拒絕</button>
-                                    </>)}
-                                    {order.status === 'in_production' && (<>
-                                        <button onClick={() => handleAction(order.id, 'ready')}
-                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
-                                            style={{ backgroundColor: '#16A34A' }}>製作完成</button>
-                                        <button onClick={() => setActionState({ orderId: order.id, action: 'cancel', reason: '' })}
-                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
-                                            style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>取消</button>
-                                    </>)}
-                                    {order.status === 'pending_payment' && order.payment_method === 'cash' && (
-                                        <button onClick={() => handleAction(order.id, 'confirm-payment')}
-                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
-                                            style={{ backgroundColor: '#16A34A' }}>確認收現</button>
-                                    )}
-                                    {order.status === 'payment_submitted' && (
-                                        <button onClick={() => handleAction(order.id, 'confirm-payment')}
-                                            className={`px-4 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
-                                            style={{ backgroundColor: '#16A34A' }}>確認付款</button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* 原因輸入框（獨立一行） */}
-                            {actionState?.orderId === order.id && (
-                                <div className="px-4 pb-4 flex gap-2 items-center">
-                                    <input
-                                        type="text"
-                                        value={actionState.reason}
-                                        onChange={e => setActionState({ ...actionState, reason: e.target.value })}
-                                        placeholder={actionState.action === 'reject' ? '請輸入拒絕原因' : '請輸入取消原因'}
-                                        className="flex-1 border rounded-lg px-3 py-1.5 text-xs"
-                                        style={css.surface}
-                                    />
-                                    <button
-                                        onClick={() => {
-                                            if (!actionState.reason.trim()) return
-                                            handleAction(actionState.orderId, actionState.action, { reason: actionState.reason })
-                                            setActionState(null)
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
-                                        style={{ backgroundColor: '#DC2626' }}>確認</button>
-                                    <button onClick={() => setActionState(null)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
-                                        style={css.surface}>取消</button>
-                                </div>
-                            )}
-
-                            {/* Contact info */}
-                            <div className="px-4 pb-3 border-t pt-3 grid grid-cols-2 gap-x-4 gap-y-1" style={css.border}>
-                                <div>
-                                    <p className="text-xs font-semibold mb-0.5" style={css.muted}>訂購人</p>
-                                    <p className="text-xs" style={css.text}>{order.customer_name}</p>
-                                    <p className="text-xs" style={css.muted}>{order.customer_phone}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs font-semibold mb-0.5" style={css.muted}>收貨人</p>
-                                    <p className="text-xs" style={css.text}>{order.recipient_name}</p>
-                                    <p className="text-xs" style={css.muted}>{order.recipient_phone}</p>
-                                    {order.recipient_address && (
-                                        <p className="text-xs mt-0.5" style={css.muted}>{order.recipient_address}</p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Notes */}
-                            <div className="px-4 pb-4 border-t pt-3 space-y-2" style={css.border}>
-                                {order.customer_note && (
-                                    <p className="text-xs" style={css.muted}>
-                                        <span className="font-semibold">客戶備註：</span>{order.customer_note}
-                                    </p>
-                                )}
-
-                                {adminNoteEditing === order.id ? (
-                                    <div className="flex gap-2 items-center">
+                                {/* 原因輸入框（獨立一行） */}
+                                {actionState?.orderId === order.id && (
+                                    <div className="px-4 pb-4 flex gap-2 items-center">
                                         <input
                                             type="text"
-                                            value={adminNoteInputs[order.id] ?? ''}
-                                            onChange={e => setAdminNoteInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
-                                            placeholder="店家備註（僅內部可見）"
+                                            value={actionState.reason}
+                                            onChange={e => setActionState({ ...actionState, reason: e.target.value })}
+                                            placeholder={actionState.action === 'reject' ? '請輸入拒絕原因' : '請輸入取消原因'}
                                             className="flex-1 border rounded-lg px-3 py-1.5 text-xs"
                                             style={css.surface}
-                                            autoFocus
                                         />
                                         <button
-                                            onClick={() => saveAdminNote(order.id)}
-                                            disabled={adminNoteSaving === order.id}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0 disabled:opacity-50 ${btn.solid}`}
-                                            style={css.primary}>
-                                            {adminNoteSaving === order.id ? '儲存中...' : '儲存'}
-                                        </button>
-                                        <button
-                                            onClick={() => setAdminNoteEditing(null)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs border shrink-0 ${btn.surface}`}
+                                            onClick={() => {
+                                                if (!actionState.reason.trim()) return
+                                                handleAction(actionState.orderId, actionState.action, { reason: actionState.reason })
+                                                setActionState(null)
+                                            }}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
+                                            style={{ backgroundColor: '#DC2626' }}>確認</button>
+                                        <button onClick={() => setActionState(null)}
+                                            className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                             style={css.surface}>取消</button>
                                     </div>
-                                ) : (
-                                    <div className="flex items-center justify-between gap-2">
-                                        <p className="text-xs flex-1" style={css.muted}>
-                                            <span className="font-semibold">店家備註：</span>
-                                            {order.admin_note ?? <span className="italic">尚未填寫</span>}
-                                        </p>
-                                        <button
-                                            onClick={() => {
-                                                setAdminNoteInputs(prev => ({ ...prev, [order.id]: order.admin_note ?? '' }))
-                                                setAdminNoteEditing(order.id)
-                                            }}
-                                            className={`text-xs underline underline-offset-2 shrink-0 ${btn.link}`}
-                                            style={{ color: 'var(--color-admin-primary)' }}>
-                                            {order.admin_note ? '編輯' : '新增'}
-                                        </button>
-                                    </div>
                                 )}
+
+                                {/* Contact info */}
+                                <div className="px-4 pb-3 border-t pt-3 space-y-2" style={css.border}>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                        <div>
+                                            <p className="text-xs font-semibold mb-0.5" style={css.muted}>訂購人</p>
+                                            <p className="text-xs" style={css.text}>{order.customer_name}</p>
+                                            <p className="text-xs" style={css.muted}>{order.customer_phone}</p>
+                                            {order.pickup_options && (
+                                                <p className="text-xs" style={css.muted}>
+                                                    <span className="font-semibold">取貨方式：</span>{order.pickup_options.name}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-semibold mb-0.5" style={css.muted}>收貨人</p>
+                                            <p className="text-xs" style={css.text}>{order.recipient_name}</p>
+                                            <p className="text-xs" style={css.muted}>{order.recipient_phone}</p>
+                                            {order.recipient_address && (
+                                                <p className="text-xs mt-0.5" style={css.muted}>{order.recipient_address}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Notes */}
+                                <div className="px-4 pb-4 border-t pt-3 space-y-2" style={css.border}>
+                                    {order.customer_note && (
+                                        <p className="text-xs" style={css.muted}>
+                                            <span className="font-semibold">客戶備註：</span>{order.customer_note}
+                                        </p>
+                                    )}
+
+                                    {adminNoteEditing === order.id ? (
+                                        <div className="flex gap-2 items-center">
+                                            <input
+                                                type="text"
+                                                value={adminNoteInputs[order.id] ?? ''}
+                                                onChange={e => setAdminNoteInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                                placeholder="店家備註（僅內部可見）"
+                                                className="flex-1 border rounded-lg px-3 py-1.5 text-xs"
+                                                style={css.surface}
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={() => saveAdminNote(order.id)}
+                                                disabled={adminNoteSaving === order.id}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0 disabled:opacity-50 ${btn.solid}`}
+                                                style={css.primary}>
+                                                {adminNoteSaving === order.id ? '儲存中...' : '儲存'}
+                                            </button>
+                                            <button
+                                                onClick={() => setAdminNoteEditing(null)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs border shrink-0 ${btn.surface}`}
+                                                style={css.surface}>取消</button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="text-xs flex-1" style={css.muted}>
+                                                <span className="font-semibold">店家備註：</span>
+                                                {order.admin_note ?? <span className="italic">尚未填寫</span>}
+                                            </p>
+                                            <button
+                                                onClick={() => {
+                                                    setAdminNoteInputs(prev => ({ ...prev, [order.id]: order.admin_note ?? '' }))
+                                                    setAdminNoteEditing(order.id)
+                                                }}
+                                                className={`text-xs underline underline-offset-2 shrink-0 ${btn.link}`}
+                                                style={{ color: 'var(--color-admin-primary)' }}>
+                                                {order.admin_note ? '編輯' : '新增'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
-                <Pagination
-                    page={page}
-                    totalPages={totalPages}
-                    total={total}
-                    limit={PAGE_LIMIT}
-                    onChange={handlePageChange}
-                />
+                        ))}
+                    </div>
+                    <Pagination
+                        page={page}
+                        totalPages={totalPages}
+                        total={total}
+                        limit={PAGE_LIMIT}
+                        onChange={handlePageChange}
+                    />
                 </>
             )}
         </div>
