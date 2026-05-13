@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 
-const DASHARRAY = 6000
 const CYCLE_MS = 4200
 
 // Paths ordered by animation wave:
@@ -105,41 +104,35 @@ export default function LiffLoader() {
             style={{ backgroundColor: 'var(--color-liff-bg)' }}
         >
             <style>{`
-                @keyframes liff-draw {
-                    from { stroke-dashoffset: ${DASHARRAY}; }
-                    to   { stroke-dashoffset: 0; }
-                }
-                @keyframes liff-fade-out {
-                    0%, 68%  { opacity: 1; }
-                    90%, 100% { opacity: 0; }
+                @keyframes liff-bounce {
+                    0%   { transform: translateY(0); }
+                    25%  { transform: translateY(-34px); }
+                    45%  { transform: translateY(0); }
+                    60%  { transform: translateY(-17px); }
+                    75%  { transform: translateY(0); }
+                    88%  { transform: translateY(-8px); }
+                    100% { transform: translateY(0); }
                 }
             `}</style>
 
             <div
                 key={cycle}
-                style={{
-                    width: 220,
-                    animation: `liff-fade-out ${CYCLE_MS}ms ease both`,
-                }}
+                style={{ width: 220 }}
             >
                 <svg
                     viewBox="0 0 832 592"
                     width="100%"
-                    fill="none"
                     xmlns="http://www.w3.org/2000/svg"
                 >
                     {PATHS.map(({ d, delay }, i) => (
                         <path
                             key={i}
                             d={d}
-                            fill="none"
-                            stroke="var(--color-liff-primary)"
-                            strokeWidth="8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeDasharray={DASHARRAY}
+                            fill="var(--color-liff-primary)"
                             style={{
-                                animation: `liff-draw 700ms ease-out ${delay}ms both`,
+                                animation: `liff-bounce 600ms ease-out ${delay}ms both`,
+                                transformBox: 'fill-box',
+                                transformOrigin: 'center',
                             }}
                         />
                     ))}
