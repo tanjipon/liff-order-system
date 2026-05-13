@@ -16,7 +16,10 @@ export async function GET(
             .from('sessions')
             .select(`
                 id, title, opens_at, closes_at, per_person_limit, is_active, created_at,
-                products ( id, name, price, stock_qty, max_per_person )
+                products (
+                    id, name, price, stock_qty, max_per_person, image_url,
+                    product_image_links ( id, position, product_images ( id, url ) )
+                )
             `)
             .eq('id', id)
             .single()
@@ -39,16 +42,19 @@ export async function PATCH(
         assertPermission(ctx, 'sessions:edit')
 
         const supabase = getSupabaseAdmin()
-        const { title, opensAt, closesAt, perPersonLimit } = await req.json()
+        const { title, opensAt, closesAt, perPersonLimit, isActive } = await req.json()
+
+        const updates: Record<string, unknown> = {
+            title,
+            opens_at: opensAt ?? null,
+            closes_at: closesAt ?? null,
+            per_person_limit: perPersonLimit ?? null,
+        }
+        if (isActive !== undefined) updates.is_active = isActive
 
         const { error } = await supabase
             .from('sessions')
-            .update({
-                title,
-                opens_at: opensAt ?? null,
-                closes_at: closesAt ?? null,
-                per_person_limit: perPersonLimit ?? null,
-            })
+            .update(updates)
             .eq('id', id)
 
         if (error) throw new Error(error.message)

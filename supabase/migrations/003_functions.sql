@@ -47,7 +47,12 @@ create or replace function create_order(
     p_display_name      text,
     p_items             jsonb,
     p_pickup_option_id  uuid,
-    p_payment_method    payment_method_enum
+    p_payment_method    payment_method_enum,
+    p_customer_name     text,
+    p_customer_phone    text,
+    p_recipient_name    text,
+    p_recipient_phone   text,
+    p_recipient_address text default null
 ) returns uuid language plpgsql as $$
 declare
     v_order_id      uuid;
@@ -155,14 +160,18 @@ begin
         end if;
     end loop;
 
-    -- 6. Create（include pickup_fee）
+    -- 6. Create order (includes pickup_fee snapshot and contact info)
     insert into orders (
         session_id, line_user_id, line_display_name,
-        payment_method, pickup_option_id, pickup_fee
+        payment_method, pickup_option_id, pickup_fee,
+        customer_name, customer_phone,
+        recipient_name, recipient_phone, recipient_address
     )
     values (
         p_session_id, p_line_user_id, p_display_name,
-        p_payment_method, p_pickup_option_id, v_pickup.extra_fee
+        p_payment_method, p_pickup_option_id, v_pickup.extra_fee,
+        p_customer_name, p_customer_phone,
+        p_recipient_name, p_recipient_phone, p_recipient_address
     )
     returning id into v_order_id;
 

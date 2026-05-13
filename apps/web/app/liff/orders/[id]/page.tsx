@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
-import { Clock, CheckCircle } from 'lucide-react'
+import { Clock, CheckCircle, PlusCircle, MinusCircle } from 'lucide-react'
 
 type OrderItem = {
     quantity: number
@@ -25,7 +25,13 @@ type Order = {
     queue_number: number | null
     created_at: string
     customer_note: string | null
+    customer_name: string
+    customer_phone: string
+    recipient_name: string
+    recipient_phone: string
+    recipient_address: string | null
     sessions: { title: string } | null
+    pickup_options: { name: string; description: string | null } | null
     order_items: OrderItem[]
 }
 
@@ -63,6 +69,7 @@ export default function OrderDetailPage() {
     const router = useRouter()
 
     const [order, setOrder] = useState<Order | null>(null)
+    const [settings, setSettings] = useState<Record<string, string>>({})
     const [dataLoaded, setDataLoaded] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -80,14 +87,17 @@ export default function OrderDetailPage() {
     const isLoading = combine(dataLoaded)
 
     useEffect(() => {
-        fetch(`/api/orders/${id}`, { headers: { 'x-liff-token': 'mock-token' } })
-            .then(res => res.json())
-            .then(body => {
-                if (body.data) {
-                    setOrder(body.data)
-                    setRemitInput(body.data.remit_last5 ?? '')
-                    setNoteInput(body.data.customer_note ?? '')
-                } else setError(body.message ?? '載入失敗')
+        Promise.all([
+            fetch(`/api/orders/${id}`, { headers: { 'x-liff-token': 'mock-token' } }).then(r => r.json()),
+            fetch('/api/settings').then(r => r.json()),
+        ])
+            .then(([orderBody, settingsBody]) => {
+                if (orderBody.data) {
+                    setOrder(orderBody.data)
+                    setRemitInput(orderBody.data.remit_last5 ?? '')
+                    setNoteInput(orderBody.data.customer_note ?? '')
+                } else setError(orderBody.message ?? '載入失敗')
+                if (settingsBody.data) setSettings(settingsBody.data)
             })
             .catch(() => setError('載入失敗，請稍後再試'))
             .finally(() => setDataLoaded(true))
@@ -288,9 +298,7 @@ export default function OrderDetailPage() {
                                                     ...prev,
                                                     [item.products.name]: Math.max(0, (prev[item.products.name] ?? 0) - 1)
                                                 }))}
-                                                className="w-7 h-7 rounded-full border flex items-center justify-center text-sm font-bold"
-                                                style={css.surface}
-                                            >−</button>
+                                            ><MinusCircle className="w-7 h-7" style={css.muted} /></button>
                                             <span className="w-8 text-center tabular-nums text-sm font-medium" style={css.text}>
                                                 {editQuantities[item.products.name] ?? 0}
                                             </span>
@@ -299,9 +307,7 @@ export default function OrderDetailPage() {
                                                     ...prev,
                                                     [item.products.name]: (prev[item.products.name] ?? 0) + 1
                                                 }))}
-                                                className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                                                style={css.primary}
-                                            >+</button>
+                                            ><PlusCircle className="w-7 h-7" style={{ color: 'var(--color-liff-primary)' }} /></button>
                                         </div>
                                     </div>
                                 ))}
@@ -346,6 +352,42 @@ export default function OrderDetailPage() {
                             </div>
                         )}
                     </div>
+
+                    {/* Pickup method card */}
+                    {order.pickup_options && (
+                        <div className="rounded-2xl border p-4" style={css.surface}>
+                            <p className="text-xs mb-1" style={css.muted}>取貨方式</p>
+                            <p className="font-semibold text-sm" style={css.text}>{order.pickup_options.name}</p>
+                            {order.pickup_options.description && (
+                                <p className="text-xs mt-0.5" style={css.muted}>{order.pickup_options.description}</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 聯絡資訊卡 */}
+                    {(order.customer_name || order.recipient_name) && (
+                        <div className="rounded-2xl border p-4 space-y-3" style={css.surface}>
+                            <p className="text-xs font-semibold" style={css.muted}>聯絡資訊</p>
+                            <div className="space-y-1">
+                                <p className="text-xs" style={css.muted}>訂購人</p>
+                                <p className="text-sm" style={css.text}>
+                                    {order.customer_name}　{order.customer_phone}
+                                </p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-xs" style={css.muted}>收貨人</p>
+                                <p className="text-sm" style={css.text}>
+                                    {order.recipient_name}　{order.recipient_phone}
+                                </p>
+                            </div>
+                            {order.recipient_address && (
+                                <div className="space-y-1">
+                                    <p className="text-xs" style={css.muted}>收貨地址</p>
+                                    <p className="text-sm" style={css.text}>{order.recipient_address}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* pending 操作卡 */}
                     {order.status === 'pending' && !editingMode && (
@@ -394,9 +436,9 @@ export default function OrderDetailPage() {
                                 <>
                                     <div className="rounded-xl p-3 text-xs space-y-1"
                                         style={{ backgroundColor: '#FFF5F0', color: 'var(--color-liff-text)' }}>
-                                        <p>銀行代碼：{process.env.NEXT_PUBLIC_BANK_CODE}</p>
-                                        <p>帳號：{process.env.NEXT_PUBLIC_BANK_ACCOUNT}</p>
-                                        <p>戶名：{process.env.NEXT_PUBLIC_BANK_HOLDER}</p>
+                                        <p>銀行代碼：{settings.bank_code}</p>
+                                        <p>帳號：{settings.bank_account}</p>
+                                        <p>戶名：{settings.bank_holder}</p>
                                         <p className="font-bold" style={{ color: '#C2410C' }}>
                                             匯款金額：NT$ {order.total_amount}
                                         </p>

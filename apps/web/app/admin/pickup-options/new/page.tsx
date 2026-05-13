@@ -11,6 +11,11 @@ const css = {
     muted: { color: 'var(--color-admin-muted)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function NewPickupOptionPage() {
     const router = useRouter()
 
@@ -18,6 +23,7 @@ export default function NewPickupOptionPage() {
     const [description, setDescription] = useState('')
     const [extraFee, setExtraFee] = useState('')
     const [bankOnly, setBankOnly] = useState(false)
+    const [requiresAddress, setRequiresAddress] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -33,6 +39,7 @@ export default function NewPickupOptionPage() {
                     description: description || null,
                     extraFee: Number(extraFee) || 0,
                     allowedPaymentMethods: bankOnly ? ['bank_transfer'] : null,
+                    requiresAddress,
                 }),
             })
             const body = await res.json()
@@ -51,7 +58,7 @@ export default function NewPickupOptionPage() {
             {/* 頁首 */}
             <div className="flex items-center gap-3 mb-6">
                 <Link href="/admin/pickup-options"
-                    className="text-sm px-3 py-1.5 rounded-lg border cursor-pointer"
+                    className={`text-sm px-3 py-1.5 rounded-lg border ${btn.surface}`}
                     style={css.surface}>
                     <span style={css.muted}>← 返回</span>
                 </Link>
@@ -108,12 +115,22 @@ export default function NewPickupOptionPage() {
                         <span style={css.text}>僅限銀行匯款</span>
                     </label>
 
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={requiresAddress}
+                            onChange={e => setRequiresAddress(e.target.checked)}
+                            className="accent-blue-600"
+                        />
+                        <span style={css.text}>需要填寫收貨地址</span>
+                    </label>
+
                     {error && <p className="text-xs" style={{ color: '#DC2626' }}>{error}</p>}
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
+                        className={`w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                         style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
                         {loading ? '新增中...' : '新增'}

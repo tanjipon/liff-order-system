@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
         const { data, error } = await supabase
             .from('pickup_options')
-            .select('id, name, description, extra_fee, allowed_payment_methods, is_active, sort_order')
+            .select('id, name, description, extra_fee, allowed_payment_methods, requires_address, is_active, sort_order')
             .order('sort_order', { ascending: true })
 
         if (error) throw new Error(error.message)
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
         assertPermission(ctx, 'pickup_options:manage')
 
         const supabase = getSupabaseAdmin()
-        const { name, description, extraFee, allowedPaymentMethods } = await req.json()
+        const { name, description, extraFee, allowedPaymentMethods, requiresAddress } = await req.json()
 
         if (!name) return errorResponse('MISSING_FIELDS', 400)
 
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
                 description:              description ?? null,
                 extra_fee:                extraFee ?? 0,
                 allowed_payment_methods:  allowedPaymentMethods ?? null,
+                requires_address:         requiresAddress ?? false,
             })
             .select('id')
             .single()

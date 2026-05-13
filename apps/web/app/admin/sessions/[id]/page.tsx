@@ -5,8 +5,12 @@ import { useParams } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
 import AdminError from '@/components/admin/AdminError'
+import ProductImageStrip, { ImageLink } from '@/components/admin/ProductImageStrip'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import Link from 'next/link'
+import Image from 'next/image'
+
+type ProductImageLink = { id: string; position: number; product_images: { id: string; url: string } }
 
 type Product = {
     id: string
@@ -14,6 +18,14 @@ type Product = {
     price: number
     stock_qty: number
     max_per_person: number | null
+    image_url: string | null
+    product_image_links: ProductImageLink[]
+}
+
+function getImages(p: Product): ImageLink[] {
+    return [...(p.product_image_links ?? [])]
+        .sort((a, b) => a.position - b.position)
+        .map(l => ({ linkId: l.id, imageId: l.product_images.id, url: l.product_images.url }))
 }
 
 type RestockItem = {
@@ -47,6 +59,11 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function SessionDetailPage() {
     const { id } = useParams<{ id: string }>()
 
@@ -68,6 +85,8 @@ export default function SessionDetailPage() {
         stockQty: string
         maxPerPerson: string
     } | null>(null)
+
+    const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
     const [restocks, setRestocks] = useState<Restock[]>([])
     const [restockOpensAt, setRestockOpensAt] = useState('')
@@ -195,7 +214,17 @@ export default function SessionDetailPage() {
     if (!session) return null
 
     return (
+        <>
         <div className="p-6 max-w-3xl mx-auto space-y-8">
+
+            {/* 頁首 */}
+            <div className="flex items-center gap-3 mb-2">
+                <Link href="/admin/sessions"
+                    className={`text-sm px-3 py-1.5 rounded-lg border ${btn.surface}`}
+                    style={css.surface}>
+                    <span style={css.muted}>← 返回</span>
+                </Link>
+            </div>
 
             {/* 開單資訊 */}
             <div className="rounded-xl border p-5" style={css.surface}>
@@ -216,12 +245,12 @@ export default function SessionDetailPage() {
                     </div>
                     <div className="flex gap-2 shrink-0">
                         <Link href={`/admin/sessions/${id}/edit`}
-                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${btn.surface}`}
                             style={css.surface}>
                             <span style={css.muted}>編輯開單</span>
                         </Link>
                         <Link href={`/admin/sessions/${id}/stats`}
-                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${btn.surface}`}
                             style={css.surface}>
                             <span style={css.muted}>查看統計</span>
                         </Link>
@@ -291,10 +320,10 @@ export default function SessionDetailPage() {
                                             <label className="text-xs font-medium opacity-0 select-none">　</label>
                                             <div className="flex gap-2">
                                                 <button type="submit"
-                                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
                                                     style={{ backgroundColor: 'var(--color-admin-primary)' }}>儲存</button>
                                                 <button type="button" onClick={() => setEditState(null)}
-                                                    className="px-3 py-1.5 rounded-lg text-xs border"
+                                                    className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                                     style={css.surface}>
                                                     <span style={css.muted}>取消</span>
                                                 </button>
@@ -302,31 +331,39 @@ export default function SessionDetailPage() {
                                         </div>
                                     </form>
                                 ) : (
-                                    <div className="flex justify-between items-center gap-3">
-                                        <div className="min-w-0">
-                                            <p className="font-semibold text-sm" style={css.text}>{p.name}</p>
-                                            <p className="text-xs mt-0.5" style={css.muted}>
-                                                NT$ {p.price}・庫存 {p.stock_qty}
-                                                {p.max_per_person ? `・每人限購 ${p.max_per_person} 件` : ''}
-                                            </p>
-                                        </div>
-                                        <div className="flex gap-2 shrink-0">
-                                            <button
-                                                onClick={() => setEditState({
-                                                    productId: p.id,
-                                                    name: p.name,
-                                                    price: String(p.price),
-                                                    stockQty: String(p.stock_qty),
-                                                    maxPerPerson: p.max_per_person ? String(p.max_per_person) : ''
-                                                })}
-                                                className="px-3 py-1.5 rounded-lg text-xs border"
-                                                style={css.surface}>
-                                                <span style={css.muted}>編輯</span>
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(p.id)}
-                                                className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                                                style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>刪除</button>
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-semibold text-sm" style={css.text}>{p.name}</p>
+                                                <p className="text-xs mt-0.5 mb-2" style={css.muted}>
+                                                    NT$ {p.price}・庫存 {p.stock_qty}
+                                                    {p.max_per_person ? `・每人限購 ${p.max_per_person} 件` : ''}
+                                                </p>
+                                                <ProductImageStrip
+                                                    productId={p.id}
+                                                    images={getImages(p)}
+                                                    onLightbox={setLightboxUrl}
+                                                    onChange={loadSession}
+                                                />
+                                            </div>
+                                            <div className="flex gap-2 shrink-0">
+                                                <button
+                                                    onClick={() => setEditState({
+                                                        productId: p.id,
+                                                        name: p.name,
+                                                        price: String(p.price),
+                                                        stockQty: String(p.stock_qty),
+                                                        maxPerPerson: p.max_per_person ? String(p.max_per_person) : ''
+                                                    })}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
+                                                    style={css.surface}>
+                                                    <span style={css.muted}>編輯</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(p.id)}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
+                                                    style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>刪除</button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -391,7 +428,7 @@ export default function SessionDetailPage() {
                     <button
                         type="submit"
                         disabled={adding}
-                        className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        className={`w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                         style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
                         {adding ? '新增中...' : '新增商品'}
@@ -434,7 +471,7 @@ export default function SessionDetailPage() {
                                     {!r.applied && r.is_active && (
                                         <button
                                             onClick={() => handleCancelRestock(r.id)}
-                                            className="px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0"
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 ${btn.solid}`}
                                             style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>取消</button>
                                     )}
                                 </div>
@@ -491,7 +528,7 @@ export default function SessionDetailPage() {
                         <button
                             type="submit"
                             disabled={addingRestock || !restockOpensAt}
-                            className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50"
+                            className={`w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                             style={{ backgroundColor: 'var(--color-admin-primary)' }}
                         >
                             {addingRestock ? '新增中...' : '新增追加庫存排程'}
@@ -501,5 +538,30 @@ export default function SessionDetailPage() {
             </div>
 
         </div>
+
+        {/* Lightbox */}
+        {lightboxUrl && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}
+                    onClick={() => setLightboxUrl(null)}
+                >
+                    <button
+                        onClick={() => setLightboxUrl(null)}
+                        className={`absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${btn.surface}`}
+                        style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
+                    >✕</button>
+                    <div className="max-w-2xl w-full" onClick={e => e.stopPropagation()}>
+                        <Image
+                            src={lightboxUrl!}
+                            alt="商品圖片"
+                            width={800}
+                            height={600}
+                            className="rounded-xl w-full h-auto"
+                        />
+                    </div>
+                </div>
+            )}
+        </>
     )
 }

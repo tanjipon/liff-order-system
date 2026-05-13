@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
 
         const { data, error } = await supabase
             .from('pickup_options')
-            .select('id, name, description, extra_fee, allowed_payment_methods')
+            .select('id, name, description, extra_fee, allowed_payment_methods, requires_address')
             .eq('is_active', true)
             .order('sort_order', { ascending: true })
 

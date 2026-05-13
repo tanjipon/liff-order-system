@@ -13,6 +13,7 @@ type PickupOption = {
     description: string | null
     extra_fee: number
     allowed_payment_methods: string[] | null
+    requires_address: boolean
     is_active: boolean
     sort_order: number
 }
@@ -24,13 +25,18 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function PickupOptionsPage() {
     const [options, setOptions] = useState<PickupOption[]>([])
     const [dataLoaded, setDataLoaded] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     const [editState, setEditState] = useState<{
-        id: string; name: string; description: string; extraFee: string; bankOnly: boolean
+        id: string; name: string; description: string; extraFee: string; bankOnly: boolean; requiresAddress: boolean
     } | null>(null)
 
     const { combine } = useMinLoading(1000)
@@ -61,6 +67,7 @@ export default function PickupOptionsPage() {
                 description: editState.description || null,
                 extraFee: Number(editState.extraFee) || 0,
                 allowedPaymentMethods: editState.bankOnly ? ['bank_transfer'] : null,
+                requiresAddress: editState.requiresAddress,
             }),
         })
         if (res.ok) {
@@ -88,7 +95,7 @@ export default function PickupOptionsPage() {
                 </div>
                 <Link
                     href="/admin/pickup-options/new"
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white cursor-pointer"
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold text-white ${btn.solid}`}
                     style={{ backgroundColor: 'var(--color-admin-primary)' }}
                 >
                     新增取貨方式
@@ -134,12 +141,18 @@ export default function PickupOptionsPage() {
                                             className="accent-blue-600" />
                                         <span style={css.text}>僅限銀行匯款</span>
                                     </label>
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" checked={editState.requiresAddress}
+                                            onChange={e => setEditState({ ...editState, requiresAddress: e.target.checked })}
+                                            className="accent-blue-600" />
+                                        <span style={css.text}>需要填寫收貨地址</span>
+                                    </label>
                                     <div className="flex gap-2">
                                         <button type="submit"
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white ${btn.solid}`}
                                             style={{ backgroundColor: 'var(--color-admin-primary)' }}>儲存</button>
                                         <button type="button" onClick={() => setEditState(null)}
-                                            className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                             style={css.surface}>
                                             <span style={css.muted}>取消</span>
                                         </button>
@@ -163,6 +176,12 @@ export default function PickupOptionsPage() {
                                                     僅限匯款
                                                 </span>
                                             )}
+                                            {opt.requires_address && (
+                                                <span className="text-xs px-2.5 py-1 rounded-full font-medium"
+                                                    style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>
+                                                    需填地址
+                                                </span>
+                                            )}
                                         </div>
                                         {opt.description && (
                                             <p className="text-xs mt-0.5" style={css.muted}>{opt.description}</p>
@@ -178,14 +197,15 @@ export default function PickupOptionsPage() {
                                                 description: opt.description ?? '',
                                                 extraFee: String(opt.extra_fee),
                                                 bankOnly: opt.allowed_payment_methods !== null,
+                                                requiresAddress: opt.requires_address,
                                             })}
-                                            className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                             style={css.surface}>
                                             <span style={css.muted}>編輯</span>
                                         </button>
                                         <button
                                             onClick={() => handleToggle(opt.id)}
-                                            className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
                                             style={opt.is_active
                                                 ? { backgroundColor: '#FEE2E2', color: '#991B1B' }
                                                 : { backgroundColor: '#DCFCE7', color: '#166534' }

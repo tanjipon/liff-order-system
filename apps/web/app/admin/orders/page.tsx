@@ -9,9 +9,19 @@ type Order = {
     status: string
     line_display_name: string
     total_amount: number
+    pickup_fee: number
     queue_number: number | null
     payment_method: string
+    remit_last5: string | null
     created_at: string
+    pickup_options: { name: string } | null
+    customer_name: string
+    customer_phone: string
+    recipient_name: string
+    recipient_phone: string
+    recipient_address: string | null
+    customer_note: string | null
+    admin_note: string | null
     order_items: {
         quantity: number
         unit_price: number
@@ -54,6 +64,11 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 const LIMIT = 20
 
 export default function OrderHistoryPage() {
@@ -72,6 +87,7 @@ export default function OrderHistoryPage() {
 
     const [sessions, setSessions] = useState<Session[]>([])
     const [products, setProducts] = useState<Product[]>([])
+    const [expandedId, setExpandedId] = useState<string | null>(null)
 
     // 載入 session 列表
     useEffect(() => {
@@ -233,7 +249,7 @@ export default function OrderHistoryPage() {
                     <button
                         onClick={handleExport}
                         disabled={!searched || loading}
-                        className="px-4 py-2 rounded-lg text-sm border disabled:opacity-40 cursor-pointer"
+                        className={`px-4 py-2 rounded-lg text-sm border disabled:opacity-40 ${btn.surface}`}
                         style={css.surface}
                     >
                         <span style={css.muted}>匯出 CSV</span>
@@ -241,7 +257,7 @@ export default function OrderHistoryPage() {
                     <button
                         onClick={handleSearch}
                         disabled={loading}
-                        className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                         style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
                         {loading ? '查詢中...' : '查詢'}
@@ -265,47 +281,154 @@ export default function OrderHistoryPage() {
             {orders.length > 0 && (
                 <>
                     <div className="space-y-3">
-                        {orders.map((order) => (
+                        {orders.map((order) => {
+                            const isExpanded = expandedId === order.id
+                            const sameRecipient =
+                                order.recipient_name === order.customer_name &&
+                                order.recipient_phone === order.customer_phone
+
+                            return (
                             <div key={order.id}
-                                className="rounded-xl border overflow-hidden p-4 flex flex-wrap md:flex-nowrap items-center gap-3"
+                                className="rounded-xl border overflow-hidden"
                                 style={css.surface}>
 
-                                {/* 狀態 */}
-                                <div className="shrink-0">
-                                    <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                                        style={STATUS_STYLE[order.status] ?? { backgroundColor: '#F3F4F6', color: '#6B7280' }}>
-                                        {STATUS_LABEL[order.status] ?? order.status}
-                                    </span>
-                                </div>
-
-                                {/* 客戶 + 品項 */}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="font-semibold text-sm" style={css.text}>{order.line_display_name}</p>
-                                        {order.queue_number && (
-                                            <span className="text-xs font-mono font-semibold"
-                                                style={{ color: 'var(--color-admin-primary)' }}>#{order.queue_number}</span>
-                                        )}
-                                        <span className="text-xs" style={css.muted}>
-                                            {new Date(order.created_at).toLocaleString('zh-TW', {
-                                                month: 'numeric', day: 'numeric',
-                                                hour: '2-digit', minute: '2-digit'
-                                            })}
+                                {/* Summary row — click to toggle detail */}
+                                <button
+                                    onClick={() => setExpandedId(isExpanded ? null : order.id)}
+                                    className={`w-full text-left p-4 flex flex-wrap md:flex-nowrap items-center gap-3 ${btn.surface}`}
+                                >
+                                    {/* Status badge */}
+                                    <div className="shrink-0">
+                                        <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
+                                            style={STATUS_STYLE[order.status] ?? { backgroundColor: '#F3F4F6', color: '#6B7280' }}>
+                                            {STATUS_LABEL[order.status] ?? order.status}
                                         </span>
                                     </div>
-                                    <p className="text-xs mt-0.5 truncate" style={css.muted}>
-                                        {order.order_items.map(i => `${i.products.name}×${i.quantity}`).join('、')}
-                                    </p>
-                                </div>
 
-                                {/* 金額 */}
-                                <div className="shrink-0 text-right">
-                                    <p className="text-sm font-bold tabular-nums" style={css.text}>
-                                        NT$ {order.total_amount.toLocaleString()}
-                                    </p>
-                                </div>
+                                    {/* Customer + items */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="font-semibold text-sm" style={css.text}>{order.line_display_name}</p>
+                                            {order.queue_number && (
+                                                <span className="text-xs font-mono font-semibold"
+                                                    style={{ color: 'var(--color-admin-primary)' }}>#{order.queue_number}</span>
+                                            )}
+                                            <span className="text-xs" style={css.muted}>
+                                                {new Date(order.created_at).toLocaleString('zh-TW', {
+                                                    month: 'numeric', day: 'numeric',
+                                                    hour: '2-digit', minute: '2-digit'
+                                                })}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs mt-0.5 truncate" style={css.muted}>
+                                            {order.order_items.map(i => `${i.products.name}×${i.quantity}`).join('、')}
+                                        </p>
+                                    </div>
+
+                                    {/* Amount + expand indicator */}
+                                    <div className="shrink-0 text-right flex items-center gap-2">
+                                        <p className="text-sm font-bold tabular-nums" style={css.text}>
+                                            NT$ {order.total_amount.toLocaleString()}
+                                        </p>
+                                        <span className="text-xs" style={css.muted}>{isExpanded ? '▲' : '▼'}</span>
+                                    </div>
+                                </button>
+
+                                {/* Expanded detail panel */}
+                                {isExpanded && (
+                                    <div className="border-t px-4 pb-4 pt-3 space-y-4" style={css.border}>
+
+                                        {/* Order items breakdown */}
+                                        <div>
+                                            <p className="text-xs font-semibold mb-2" style={css.muted}>訂購品項</p>
+                                            <div className="space-y-1">
+                                                {order.order_items.map((item, i) => (
+                                                    <div key={i} className="flex justify-between text-sm">
+                                                        <span style={css.muted}>{item.products.name} × {item.quantity}</span>
+                                                        <span style={css.text}>NT$ {item.unit_price * item.quantity}</span>
+                                                    </div>
+                                                ))}
+                                                {order.pickup_fee > 0 && (
+                                                    <div className="flex justify-between text-xs pt-1" style={{ borderTop: '1px solid var(--color-admin-border)' }}>
+                                                        <span style={css.muted}>取貨費用</span>
+                                                        <span style={css.muted}>NT$ {order.pickup_fee}</span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between text-sm font-bold pt-1" style={{ borderTop: '1px solid var(--color-admin-border)' }}>
+                                                    <span style={css.text}>總計</span>
+                                                    <span style={css.text}>NT$ {order.total_amount}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Pickup method + payment method */}
+                                        <div className="grid grid-cols-2 gap-x-4">
+                                            <div>
+                                                <p className="text-xs font-semibold mb-1" style={css.muted}>取貨方式</p>
+                                                <p className="text-sm" style={css.text}>
+                                                    {order.pickup_options?.name ?? '—'}
+                                                </p>
+                                                {order.pickup_fee > 0 && (
+                                                    <p className="text-xs" style={css.muted}>+NT$ {order.pickup_fee}</p>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-semibold mb-1" style={css.muted}>付款方式</p>
+                                                <p className="text-sm" style={css.text}>
+                                                    {order.payment_method === 'bank_transfer' ? '銀行匯款' : '現金付款'}
+                                                </p>
+                                                {order.remit_last5 && (
+                                                    <span className="text-xs px-2 py-0.5 rounded-full"
+                                                        style={{ backgroundColor: '#EDE9FE', color: '#5B21B6' }}>
+                                                        後五碼 {order.remit_last5}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Contact info */}
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                                            <div>
+                                                <p className="text-xs font-semibold mb-1" style={css.muted}>訂購人</p>
+                                                <p className="text-xs" style={css.muted}>{order.customer_name}</p>
+                                                <p className="text-xs" style={css.muted}>{order.customer_phone}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-semibold mb-1" style={css.muted}>收貨人</p>
+                                                {sameRecipient ? (
+                                                    <p className="text-xs" style={css.muted}>同訂購人</p>
+                                                ) : (
+                                                    <>
+                                                        <p className="text-xs" style={css.muted}>{order.recipient_name}</p>
+                                                        <p className="text-xs" style={css.muted}>{order.recipient_phone}</p>
+                                                    </>
+                                                )}
+                                                {order.recipient_address && (
+                                                    <p className="text-xs mt-1" style={css.muted}>{order.recipient_address}</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Notes */}
+                                        {(order.customer_note || order.admin_note) && (
+                                            <div className="space-y-1">
+                                                {order.customer_note && (
+                                                    <p className="text-xs" style={css.muted}>
+                                                        <span className="font-semibold">客戶備註：</span>{order.customer_note}
+                                                    </p>
+                                                )}
+                                                {order.admin_note && (
+                                                    <p className="text-xs" style={css.muted}>
+                                                        <span className="font-semibold">店家備註：</span>{order.admin_note}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
-                        ))}
+                            )
+                        })}
                     </div>
                     <Pagination
                         page={page}

@@ -8,7 +8,11 @@ export async function POST(req: NextRequest) {
         const profile = await verifyLiffToken(req)
         const supabase = getSupabaseAdmin()
 
-        const { sessionId, items, pickupOptionId, paymentMethod } = await req.json()
+        const {
+            sessionId, items, pickupOptionId, paymentMethod,
+            customerName, customerPhone,
+            recipientName, recipientPhone, recipientAddress,
+        } = await req.json()
 
         const { data: orderId, error } = await supabase.rpc('create_order', {
             p_session_id:           sessionId,
@@ -16,7 +20,12 @@ export async function POST(req: NextRequest) {
             p_display_name:         profile.displayName,
             p_items:                items,
             p_pickup_option_id:     pickupOptionId,
-            p_payment_method:       paymentMethod
+            p_payment_method:       paymentMethod,
+            p_customer_name:        customerName ?? '',
+            p_customer_phone:       customerPhone ?? '',
+            p_recipient_name:       recipientName ?? '',
+            p_recipient_phone:      recipientPhone ?? '',
+            p_recipient_address:    recipientAddress ?? null,
         })
 
         if (error) throw new Error(error.message)

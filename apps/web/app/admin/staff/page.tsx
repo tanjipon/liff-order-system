@@ -22,6 +22,11 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function StaffPage() {
     const [staff, setStaff] = useState<StaffMember[]>([])
     const [dataLoaded, setDataLoaded] = useState(false)
@@ -75,7 +80,7 @@ export default function StaffPage() {
                 </div>
                 <Link
                     href="/admin/staff/new"
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold text-white ${btn.solid}`}
                     style={{ backgroundColor: 'var(--color-admin-primary)' }}
                 >
                     新增人員
@@ -122,21 +127,21 @@ export default function StaffPage() {
                             <div className="shrink-0 flex gap-2">
                                 <button
                                     onClick={() => handleResendInvite(s.userId)}
-                                    className="px-3 py-1.5 rounded-lg text-xs border cursor-pointer"
+                                    className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                     style={css.surface}>
                                     <span style={css.muted}>重送邀請</span>
                                 </button>
                                 {s.isActive ? (
                                     <button
                                         onClick={() => handleDeactivate(s.userId)}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
                                         style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>
                                         停用
                                     </button>
                                 ) : (
                                     <button
                                         onClick={() => handleActivate(s.userId)}
-                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${btn.solid}`}
                                         style={{ backgroundColor: '#DCFCE7', color: '#166534' }}>
                                         啟用
                                     </button>

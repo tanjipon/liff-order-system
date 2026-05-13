@@ -24,6 +24,11 @@ const css = {
     border: { borderColor: 'var(--color-admin-border)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function SessionsPage() {
     const [sessions, setSessions] = useState<Session[]>([])
     const [dataLoaded, setDataLoaded] = useState(false)
@@ -57,7 +62,7 @@ export default function SessionsPage() {
                 </div>
                 <Link
                     href="/admin/sessions/new"
-                    className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold text-white ${btn.solid}`}
                     style={{ backgroundColor: 'var(--color-admin-primary)' }}
                 >
                     新增開單
@@ -99,14 +104,14 @@ export default function SessionsPage() {
                             <div className="shrink-0 flex gap-2">
                                 <Link
                                     href={`/admin/sessions/${s.id}`}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${btn.surface}`}
                                     style={css.surface}
                                 >
                                     <span style={css.muted}>詳情</span>
                                 </Link>
                                 <Link
                                     href={`/admin/sessions/${s.id}/edit`}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${btn.surface}`}
                                     style={css.surface}
                                 >
                                     <span style={css.muted}>編輯</span>

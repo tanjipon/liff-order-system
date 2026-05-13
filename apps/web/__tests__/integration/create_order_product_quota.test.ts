@@ -34,6 +34,11 @@ describe('create_order per-product quota 驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 10 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         expect(error).toBeNull()
@@ -49,6 +54,11 @@ describe('create_order per-product quota 驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 3 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         expect(error).toBeNull()
@@ -64,6 +74,11 @@ describe('create_order per-product quota 驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 3 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         expect(error?.message).toContain('PRODUCT_QUOTA_EXCEEDED')
@@ -80,6 +95,11 @@ describe('create_order per-product quota 驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 2 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         // second order amount of 2, 4 in total, reach the limit of 3
@@ -90,6 +110,11 @@ describe('create_order per-product quota 驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 2 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         expect(error?.message).toContain('PRODUCT_QUOTA_EXCEEDED')
@@ -106,6 +131,11 @@ describe('create_order per-product quota 驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 2 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         // cancel order
@@ -122,6 +152,11 @@ describe('create_order per-product quota 驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 2 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         expect(error).toBeNull()

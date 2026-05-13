@@ -41,6 +41,11 @@ describe('create_order 時間條件驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 1 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         expect(error?.message).toContain('SESSION_NOT_ACTIVE')
@@ -59,6 +64,11 @@ describe('create_order 時間條件驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 1 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         expect(error?.message).toContain('SESSION_NOT_ACTIVE')
@@ -77,6 +87,11 @@ describe('create_order 時間條件驗證', () => {
             p_items:            [{ product_id: PRODUCT_ID, quantity: 1 }],
             p_pickup_option_id: PICKUP_OPTION_ID,
             p_payment_method:   'bank_transfer',
+            p_customer_name: 'test_customer',
+            p_customer_phone: '0912345678',
+            p_recipient_name: 'test_recipient',
+            p_recipient_phone: '0912345678',
+            p_recipient_address: null,
         })
 
         expect(error).toBeNull()

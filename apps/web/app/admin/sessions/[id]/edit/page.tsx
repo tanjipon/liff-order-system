@@ -12,6 +12,11 @@ const css = {
     muted: { color: 'var(--color-admin-muted)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function EditSessionPage() {
     const { id } = useParams<{ id: string }>()
     const router = useRouter()
@@ -20,8 +25,10 @@ export default function EditSessionPage() {
     const [opensAt, setOpensAt] = useState('')
     const [closesAt, setClosesAt] = useState('')
     const [perPersonLimit, setPerPersonLimit] = useState('')
+    const [isActive, setIsActive] = useState(false)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [toggling, setToggling] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
@@ -33,9 +40,23 @@ export default function EditSessionPage() {
                 setOpensAt(s.opens_at ? toDatetimeLocal(s.opens_at) : '')
                 setClosesAt(s.closes_at ? toDatetimeLocal(s.closes_at) : '')
                 setPerPersonLimit(s.per_person_limit ? String(s.per_person_limit) : '')
+                setIsActive(s.is_active)
             })
             .finally(() => setLoading(false))
     }, [])
+
+    async function handleToggle() {
+        setToggling(true)
+        try {
+            await adminFetch(`/api/admin/sessions/${id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ isActive: !isActive }),
+            })
+            setIsActive(prev => !prev)
+        } finally {
+            setToggling(false)
+        }
+    }
 
     async function handleSubmit(e: React.SyntheticEvent) {
         e.preventDefault()
@@ -69,7 +90,7 @@ export default function EditSessionPage() {
             {/* 頁首 */}
             <div className="flex items-center gap-3 mb-6">
                 <Link href={`/admin/sessions/${id}`}
-                    className="text-sm px-3 py-1.5 rounded-lg border"
+                    className={`text-sm px-3 py-1.5 rounded-lg border ${btn.surface}`}
                     style={css.surface}>
                     <span style={css.muted}>← 返回</span>
                 </Link>
@@ -130,12 +151,40 @@ export default function EditSessionPage() {
                     <button
                         type="submit"
                         disabled={saving}
-                        className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        className={`w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                         style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
                         {saving ? '儲存中...' : '儲存'}
                     </button>
                 </form>
+            </div>
+
+            {/* 啟用 / 停用 */}
+            <div className="rounded-xl border p-5 mt-4" style={css.surface}>
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <p className="text-sm font-semibold" style={css.text}>
+                            開單狀態：
+                            <span className="ml-1.5 font-semibold"
+                                style={{ color: isActive ? '#16A34A' : '#6B7280' }}>
+                                {isActive ? '啟用中' : '已停用'}
+                            </span>
+                        </p>
+                        <p className="text-xs mt-0.5" style={css.muted}>
+                            {isActive ? '客戶目前可以看到此開單並下訂單' : '客戶目前無法看到此開單'}
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleToggle}
+                        disabled={toggling}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 shrink-0 ${btn.solid}`}
+                        style={isActive
+                            ? { backgroundColor: '#FEE2E2', color: '#991B1B' }
+                            : { backgroundColor: '#DCFCE7', color: '#166534' }}
+                    >
+                        {toggling ? '處理中...' : isActive ? '停用' : '啟用'}
+                    </button>
+                </div>
             </div>
         </div>
     )

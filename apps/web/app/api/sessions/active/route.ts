@@ -20,7 +20,9 @@ export async function GET(req: NextRequest) {
                 name,
                 price,
                 stock_qty,
-                max_per_person
+                max_per_person,
+                image_url,
+                product_image_links ( id, position, product_images ( id, url ) )
             )
         `)
         .eq('is_active', true)
@@ -46,7 +48,7 @@ export async function GET(req: NextRequest) {
     // re-query products to get new stock_qty
     const { data: products } = await supabase
         .from('products')
-        .select('id, name, price, stock_qty, max_per_person')
+        .select('id, name, price, stock_qty, max_per_person, image_url, product_image_links ( id, position, product_images ( id, url ) )')
         .eq('session_id', session.id)
 
     return Response.json({

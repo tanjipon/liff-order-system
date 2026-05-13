@@ -25,7 +25,13 @@ export async function GET(
                 queue_number,
                 created_at,
                 customer_note,
+                customer_name,
+                customer_phone,
+                recipient_name,
+                recipient_phone,
+                recipient_address,
                 sessions ( title ),
+                pickup_options ( name, description ),
                 order_items (
                     quantity,
                     unit_price,

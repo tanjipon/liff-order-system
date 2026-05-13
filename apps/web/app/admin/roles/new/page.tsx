@@ -11,6 +11,11 @@ const css = {
     muted: { color: 'var(--color-admin-muted)' },
 } as const
 
+const btn = {
+    solid: 'cursor-pointer transition hover:brightness-90 active:brightness-75 disabled:hover:brightness-100 disabled:active:brightness-100',
+    surface: 'cursor-pointer transition hover:brightness-95 active:brightness-90 disabled:hover:brightness-100 disabled:active:brightness-100',
+} as const
+
 export default function NewRolePage() {
     const router = useRouter()
 
@@ -43,7 +48,7 @@ export default function NewRolePage() {
             {/* 頁首 */}
             <div className="flex items-center gap-3 mb-6">
                 <Link href="/admin/roles"
-                    className="text-sm px-3 py-1.5 rounded-lg border cursor-pointer"
+                    className={`text-sm px-3 py-1.5 rounded-lg border ${btn.surface}`}
                     style={css.surface}>
                     <span style={css.muted}>← 返回</span>
                 </Link>
@@ -70,7 +75,7 @@ export default function NewRolePage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
+                        className={`w-full rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-50 ${btn.solid}`}
                         style={{ backgroundColor: 'var(--color-admin-primary)' }}
                     >
                         {loading ? '新增中...' : '新增角色'}
