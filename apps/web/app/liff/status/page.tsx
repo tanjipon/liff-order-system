@@ -62,7 +62,7 @@ const css = {
 
 export default function StatusPage() {
     const router = useRouter()
-    const { ready, token } = useLiff()
+    const { ready, token, error: liffError } = useLiff()
     const [orders, setOrders] = useState<Order[]>([])
     const [dataLoaded, setDataLoaded] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -71,7 +71,12 @@ export default function StatusPage() {
     const isLoading = combine(dataLoaded) || !ready
 
     useEffect(() => {
-        if (!ready || !token) return
+        if (!ready) return
+        if (!token) {
+            setError(liffError ?? '請透過 LINE 開啟此頁面')
+            setDataLoaded(true)
+            return
+        }
         fetch('/api/orders', { headers: { 'x-liff-token': token } })
             .then(res => res.json())
             .then(body => {

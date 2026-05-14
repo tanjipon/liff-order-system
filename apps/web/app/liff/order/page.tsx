@@ -80,7 +80,7 @@ function OrderPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const sessionId = searchParams.get('sessionId')
-    const { ready, token } = useLiff()
+    const { ready, token, error: liffError } = useLiff()
 
     const [session, setSession] = useState<Session | null>(null)
     const [quantities, setQuantities] = useState<Record<string, number>>({})
@@ -128,6 +128,12 @@ function OrderPageInner() {
     }, [now, session?.next_restock_at])
 
     useEffect(() => {
+        if (!ready) return
+        if (!token) {
+            setError(liffError ?? '請透過 LINE 開啟此頁面')
+            setDataLoaded(true)
+            return
+        }
         fetch(activeUrl)
             .then(res => res.json())
             .then(body => {
@@ -136,7 +142,7 @@ function OrderPageInner() {
                     const init: Record<string, number> = {}
                     body.data.products.forEach((p: Product) => { init[p.id] = 0 })
                     setQuantities(init)
-                    fetch('/api/orders', { headers: { 'x-liff-token': token ?? '' } })
+                    fetch('/api/orders', { headers: { 'x-liff-token': token } })
                         .then(res => res.json())
                         .then(body => {
                             if (body.data) {
@@ -159,7 +165,7 @@ function OrderPageInner() {
             })
             .catch(() => setError('載入失敗，請稍後再試'))
             .finally(() => setDataLoaded(true))
-    }, [])
+    }, [ready, token])
 
     useEffect(() => {
         if (step === 'pickup' && pickupOptions.length === 0) {
