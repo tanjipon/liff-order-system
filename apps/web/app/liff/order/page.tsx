@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
@@ -75,7 +75,7 @@ const css = {
     successBg: { backgroundColor: '#ECFDF5', color: '#065F46' },
 } as const
 
-export default function OrderPage() {
+function OrderPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const sessionId = searchParams.get('sessionId')
@@ -634,4 +634,12 @@ export default function OrderPage() {
     }
 
     return null
+}
+
+export default function OrderPage() {
+    return (
+        <Suspense>
+            <OrderPageInner />
+        </Suspense>
+    )
 }
