@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
+import { useLiff } from '@/hooks/useLiff'
 import { ShoppingBag } from 'lucide-react'
 
 type OrderItem = {
@@ -61,15 +62,17 @@ const css = {
 
 export default function StatusPage() {
     const router = useRouter()
+    const { ready, token } = useLiff()
     const [orders, setOrders] = useState<Order[]>([])
     const [dataLoaded, setDataLoaded] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     const { combine } = useMinLoading(1500)
-    const isLoading = combine(dataLoaded)
+    const isLoading = combine(dataLoaded) || !ready
 
     useEffect(() => {
-        fetch('/api/orders', { headers: { 'x-liff-token': 'mock-token' } })
+        if (!ready || !token) return
+        fetch('/api/orders', { headers: { 'x-liff-token': token } })
             .then(res => res.json())
             .then(body => {
                 if (body.data) setOrders(body.data)
@@ -77,7 +80,7 @@ export default function StatusPage() {
             })
             .catch(() => setError('載入失敗，請稍後再試'))
             .finally(() => setDataLoaded(true))
-    }, [])
+    }, [ready, token])
 
     if (isLoading) return <LiffLoader />
 

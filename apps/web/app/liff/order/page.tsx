@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
+import { useLiff } from '@/hooks/useLiff'
 import { CheckCircle } from 'lucide-react'
 import ProductGallery from '@/components/liff/ProductGallery'
 import AddressInput, { type AddressParts, EMPTY_ADDRESS } from '@/components/liff/AddressInput'
@@ -79,6 +80,7 @@ function OrderPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const sessionId = searchParams.get('sessionId')
+    const { ready, token } = useLiff()
 
     const [session, setSession] = useState<Session | null>(null)
     const [quantities, setQuantities] = useState<Record<string, number>>({})
@@ -105,7 +107,7 @@ function OrderPageInner() {
 
     const [now, setNow] = useState(() => Date.now())
     const { combine } = useMinLoading(1500)
-    const isLoading = combine(dataLoaded)
+    const isLoading = combine(dataLoaded) || !ready
 
     const activeUrl = sessionId
         ? `/api/sessions/active?sessionId=${sessionId}`
@@ -134,7 +136,7 @@ function OrderPageInner() {
                     const init: Record<string, number> = {}
                     body.data.products.forEach((p: Product) => { init[p.id] = 0 })
                     setQuantities(init)
-                    fetch('/api/orders', { headers: { 'x-liff-token': 'mock-token' } })
+                    fetch('/api/orders', { headers: { 'x-liff-token': token ?? '' } })
                         .then(res => res.json())
                         .then(body => {
                             if (body.data) {
@@ -230,7 +232,7 @@ function OrderPageInner() {
         try {
             const res = await fetch('/api/orders', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-liff-token': 'mock-token' },
+                headers: { 'Content-Type': 'application/json', 'x-liff-token': token ?? '' },
                 body: JSON.stringify({
                     sessionId: session!.id,
                     items: session!.products
