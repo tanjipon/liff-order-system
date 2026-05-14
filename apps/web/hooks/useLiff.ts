@@ -49,7 +49,8 @@ export function useLiff(): LiffState {
                 const token = liff.getAccessToken()
                 setState({ ready: true, token, error: token ? null : '無法取得 LINE 登入狀態' })
             } catch (e: any) {
-                setState({ ready: true, token: null, error: '登入失敗，請重試' })
+                const msg = e?.code ? `${e.code}: ${e.message}` : (e?.message ?? '登入失敗，請重試')
+                setState({ ready: true, token: null, error: msg })
             }
         })
     }, [])
