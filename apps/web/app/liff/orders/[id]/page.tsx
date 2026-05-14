@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
-import { useLiff } from '@/hooks/useLiff'
+import { useLiff } from '@/components/liff/LiffProvider'
 import { Clock, CheckCircle, PlusCircle, MinusCircle } from 'lucide-react'
 
 type OrderItem = {
