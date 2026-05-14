@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
+import { useLiff } from '@/hooks/useLiff'
 import { Clock, CheckCircle, PlusCircle, MinusCircle } from 'lucide-react'
 
 type OrderItem = {
@@ -67,6 +68,7 @@ const css = {
 export default function OrderDetailPage() {
     const { id } = useParams<{ id: string }>()
     const router = useRouter()
+    const { ready, token } = useLiff()
 
     const [order, setOrder] = useState<Order | null>(null)
     const [settings, setSettings] = useState<Record<string, string>>({})
@@ -84,11 +86,12 @@ export default function OrderDetailPage() {
     const [noteSaving, setNoteSaving] = useState(false)
 
     const { combine } = useMinLoading(1000)
-    const isLoading = combine(dataLoaded)
+    const isLoading = combine(dataLoaded) || !ready
 
     useEffect(() => {
+        if (!ready || !token) return
         Promise.all([
-            fetch(`/api/orders/${id}`, { headers: { 'x-liff-token': 'mock-token' } }).then(r => r.json()),
+            fetch(`/api/orders/${id}`, { headers: { 'x-liff-token': token } }).then(r => r.json()),
             fetch('/api/settings').then(r => r.json()),
         ])
             .then(([orderBody, settingsBody]) => {
@@ -101,7 +104,7 @@ export default function OrderDetailPage() {
             })
             .catch(() => setError('載入失敗，請稍後再試'))
             .finally(() => setDataLoaded(true))
-    }, [id])
+    }, [id, ready, token])
 
     function startEdit() {
         if (!order) return
@@ -122,7 +125,7 @@ export default function OrderDetailPage() {
 
             const res = await fetch(`/api/orders/${order.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'x-liff-token': 'mock-token' },
+                headers: { 'Content-Type': 'application/json', 'x-liff-token': token ?? '' },
                 body: JSON.stringify({ items })
             })
             if (!res.ok) {
@@ -144,7 +147,7 @@ export default function OrderDetailPage() {
         try {
             const res = await fetch(`/api/orders/${order.id}`, {
                 method: 'DELETE',
-                headers: { 'x-liff-token': 'mock-token' }
+                headers: { 'x-liff-token': token ?? '' }
             })
             if (!res.ok) {
                 const body = await res.json()
@@ -165,7 +168,7 @@ export default function OrderDetailPage() {
         try {
             await fetch(`/api/orders/${order.id}/note`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'x-liff-token': 'mock-token' },
+                headers: { 'Content-Type': 'application/json', 'x-liff-token': token ?? '' },
                 body: JSON.stringify({ note: noteInput.trim() || null })
             })
             setOrder({ ...order, customer_note: noteInput.trim() || null })
@@ -184,7 +187,7 @@ export default function OrderDetailPage() {
         try {
             const res = await fetch(`/api/orders/${order.id}/remit`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'x-liff-token': 'mock-token' },
+                headers: { 'Content-Type': 'application/json', 'x-liff-token': token ?? '' },
                 body: JSON.stringify({ remitLast5: trimmed })
             })
             if (!res.ok) {
