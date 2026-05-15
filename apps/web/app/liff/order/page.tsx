@@ -6,7 +6,7 @@ import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import { useLiff } from '@/components/liff/LiffProvider'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, MinusCircle, PlusCircle } from 'lucide-react'
 import ProductGallery from '@/components/liff/ProductGallery'
 import AddressInput, { type AddressParts, EMPTY_ADDRESS } from '@/components/liff/AddressInput'
 import { formatAddress } from '@/lib/twAddress'
@@ -329,9 +329,9 @@ function OrderPageInner() {
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => updateQuantity(product.id, -1, product.stock_qty, product.max_per_person)}
-                                        className="w-8 h-8 rounded-full border flex items-center justify-center text-base font-bold"
-                                        style={css.surface}
-                                    >−</button>
+                                    >
+                                        <MinusCircle className="w-6 h-6" style={css.muted} />
+                                    </button>
                                     {/* 固定寬度：tabular-nums 確保等寬數字 */}
                                     <span className="w-8 text-center text-sm font-medium tabular-nums" style={css.text}>
                                         {quantities[product.id] ?? 0}
@@ -343,9 +343,10 @@ function OrderPageInner() {
                                             (session.per_person_limit !== null && totalSelected >= session.per_person_limit) ||
                                             (product.max_per_person !== null && (quantities[product.id] ?? 0) >= product.max_per_person - (productQuotaUsed[product.id] ?? 0))
                                         }
-                                        className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold text-white disabled:opacity-40"
-                                        style={css.primary}
-                                    >+</button>
+                                        className="disabled:opacity-40"
+                                    >
+                                        <PlusCircle className="w-6 h-6" style={css.accent} />
+                                    </button>
                                 </div>
                             </div>
                         </div>
