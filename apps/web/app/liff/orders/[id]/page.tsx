@@ -12,7 +12,7 @@ type OrderItem = {
     quantity: number
     unit_price: number
     product_id: string
-    products: { name: string }
+    products: { name: string; max_per_person: number | null; stock_qty: number }
 }
 
 type Order = {
@@ -31,7 +31,7 @@ type Order = {
     recipient_name: string
     recipient_phone: string
     recipient_address: string | null
-    sessions: { title: string } | null
+    sessions: { title: string; per_person_limit: number | null } | null
     pickup_options: { name: string; description: string | null } | null
     order_items: OrderItem[]
 }
@@ -213,6 +213,9 @@ export default function OrderDetailPage() {
 
     if (!order) return null
 
+    const perPersonLimit = order.sessions?.per_person_limit ?? null
+    const totalEditQty = Object.values(editQuantities).reduce((s, q) => s + q, 0)
+
     return (
         <div className="min-h-screen w-full" style={css.bg}>
             <div className="max-w-md mx-auto p-4">
@@ -297,28 +300,55 @@ export default function OrderDetailPage() {
 
                         {editingMode ? (
                             <div className="space-y-2">
-                                {order.order_items.map(item => (
+                                {perPersonLimit && (
+                                    <p className="text-xs mb-1" style={
+                                        totalEditQty > perPersonLimit ? { color: '#C0392B' } : css.muted
+                                    }>
+                                        每人限購 {perPersonLimit} 件・已選 {totalEditQty} 件
+                                    </p>
+                                )}
+                                {order.order_items.map(item => {
+                                    const qty = editQuantities[item.products.name] ?? 0
+                                    const maxStock = item.products.stock_qty + item.quantity // 加回自己原本佔的庫存
+                                    const maxPerProduct = item.products.max_per_person
+                                    const maxByLimit = perPersonLimit !== null
+                                        ? perPersonLimit - (totalEditQty - qty)
+                                        : Infinity
+                                    const effectiveMax = Math.min(
+                                        maxStock,
+                                        maxPerProduct ?? Infinity,
+                                        maxByLimit
+                                    )
+                                    return (
                                     <div key={item.product_id} className="flex items-center justify-between text-sm">
-                                        <span style={css.text}>{item.products.name}</span>
+                                        <div>
+                                            <span style={css.text}>{item.products.name}</span>
+                                            {maxPerProduct && (
+                                                <p className="text-xs" style={css.muted}>單品限購 {maxPerProduct} 件</p>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => setEditQuantities(prev => ({
                                                     ...prev,
-                                                    [item.products.name]: Math.max(0, (prev[item.products.name] ?? 0) - 1)
+                                                    [item.products.name]: Math.max(0, qty - 1)
                                                 }))}
                                             ><MinusCircle className="w-7 h-7" style={css.muted} /></button>
                                             <span className="w-8 text-center tabular-nums text-sm font-medium" style={css.text}>
-                                                {editQuantities[item.products.name] ?? 0}
+                                                {qty}
                                             </span>
                                             <button
+                                                disabled={qty >= effectiveMax}
                                                 onClick={() => setEditQuantities(prev => ({
                                                     ...prev,
-                                                    [item.products.name]: (prev[item.products.name] ?? 0) + 1
+                                                    [item.products.name]: qty + 1
                                                 }))}
+                                                style={{ opacity: qty >= effectiveMax ? 0.4 : 1 }}
                                             ><PlusCircle className="w-7 h-7" style={{ color: 'var(--color-liff-primary)' }} /></button>
                                         </div>
                                     </div>
-                                ))}
+                                    )
+                                })}
                                 <div className="flex gap-2 mt-3">
                                     <button
                                         onClick={submitEdit}
