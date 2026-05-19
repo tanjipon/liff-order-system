@@ -1,25 +1,25 @@
 @import "tailwindcss";
 
-/* Prevent iOS Safari from zooming in when focusing input fields.
-   Date/time inputs open a native picker (no keyboard), so they don't
-   trigger zoom and are excluded to avoid breaking the native date UI. */
+/* iOS Safari date/time inputs have an intrinsic minimum width that causes
+   overflow. Force them to respect their container width globally. */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"],
+input[type="week"] {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Prevent iOS Safari from zooming in when focusing text input fields.
+   Date/time inputs are excluded — they open a native picker (no keyboard)
+   so they never trigger zoom. */
 @supports (-webkit-touch-callout: none) {
     input:not([type="date"]):not([type="datetime-local"]):not([type="time"]):not([type="month"]):not([type="week"]),
     select,
     textarea {
         font-size: 16px;
-    }
-
-    /* iOS Safari date/time inputs have an intrinsic minimum width that ignores
-       w-full. Force them to respect their container width. */
-    input[type="date"],
-    input[type="datetime-local"],
-    input[type="time"],
-    input[type="month"],
-    input[type="week"] {
-        min-width: 0;
-        width: 100%;
-        box-sizing: border-box;
     }
 }
 
