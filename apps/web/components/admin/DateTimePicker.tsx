@@ -40,7 +40,7 @@ export default function DateTimePicker({ value, onChange, required }: Props) {
     return (
         <ReactDatePicker
             selected={selected}
-            onChange={date => onChange(date ? toLocalIso(date) : '')}
+            onChange={(date: Date | null) => onChange(date ? toLocalIso(date) : '')}
             showTimeSelect
             timeFormat="HH:mm"
             timeIntervals={15}
