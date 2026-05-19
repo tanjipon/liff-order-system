@@ -106,7 +106,7 @@ export default function EditSessionPage() {
                             value={title}
                             onChange={e => setTitle(e.target.value)}
                             required
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
@@ -117,7 +117,7 @@ export default function EditSessionPage() {
                             type="datetime-local"
                             value={opensAt}
                             onChange={e => setOpensAt(e.target.value)}
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
@@ -128,7 +128,7 @@ export default function EditSessionPage() {
                             type="datetime-local"
                             value={closesAt}
                             onChange={e => setClosesAt(e.target.value)}
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
@@ -141,7 +141,7 @@ export default function EditSessionPage() {
                             value={perPersonLimit}
                             onChange={e => setPerPersonLimit(e.target.value)}
                             placeholder="不填表示無限制"
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>

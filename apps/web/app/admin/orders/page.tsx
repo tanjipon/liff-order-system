@@ -169,7 +169,7 @@ export default function OrderHistoryPage() {
             </div>
 
             {/* 篩選列 */}
-            <div className="rounded-xl border p-4 mb-6 space-y-3" style={css.surface}>
+            <div className="rounded-xl border p-4 mb-6 space-y-3 overflow-hidden" style={css.surface}>
                 {/* 電腦版同一列，手機版狀態獨一列、日期獨一列 */}
                 <div className="flex flex-col md:flex-row gap-3">
                     <div className="flex flex-col gap-1 md:flex-1">
@@ -187,25 +187,25 @@ export default function OrderHistoryPage() {
                         </select>
                     </div>
 
-                    <div className="flex gap-3 md:flex-1">
-                        <div className="flex flex-col gap-1 flex-1">
+                    <div className="grid grid-cols-2 gap-3 md:flex-1">
+                        <div className="flex flex-col gap-1 min-w-0">
                             <label className="text-xs font-medium" style={css.muted}>開始日期</label>
                             <input
                                 type="date"
                                 value={dateFrom}
                                 onChange={e => setDateFrom(e.target.value)}
-                                className="border rounded-lg px-3 py-2 text-sm w-full"
+                                className="border rounded-lg px-2 py-2 text-xs w-full min-w-0"
                                 style={css.surface}
                             />
                         </div>
 
-                        <div className="flex flex-col gap-1 flex-1">
+                        <div className="flex flex-col gap-1 min-w-0">
                             <label className="text-xs font-medium" style={css.muted}>結束日期</label>
                             <input
                                 type="date"
                                 value={dateTo}
                                 onChange={e => setDateTo(e.target.value)}
-                                className="border rounded-lg px-3 py-2 text-sm w-full"
+                                className="border rounded-lg px-2 py-2 text-xs w-full min-w-0"
                                 style={css.surface}
                             />
                         </div>

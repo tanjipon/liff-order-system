@@ -385,7 +385,7 @@ export default function SessionDetailPage() {
                             onChange={e => setName(e.target.value)}
                             required
                             placeholder="例：草莓塔"
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
@@ -397,7 +397,7 @@ export default function SessionDetailPage() {
                                 value={price}
                                 onChange={e => setPrice(e.target.value)}
                                 required
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                                className="w-full border rounded-lg px-2 py-2 text-xs"
                                 style={css.surface}
                             />
                         </div>
@@ -408,7 +408,7 @@ export default function SessionDetailPage() {
                                 value={stockQty}
                                 onChange={e => setStockQty(e.target.value)}
                                 required
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                                className="w-full border rounded-lg px-2 py-2 text-xs"
                                 style={css.surface}
                             />
                         </div>
@@ -419,7 +419,7 @@ export default function SessionDetailPage() {
                                 value={maxPerPerson}
                                 onChange={e => setMaxPerPerson(e.target.value)}
                                 placeholder="不填表示無限制"
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                                className="w-full border rounded-lg px-2 py-2 text-xs"
                                 style={css.surface}
                             />
                         </div>
@@ -491,7 +491,7 @@ export default function SessionDetailPage() {
                                 value={restockOpensAt}
                                 onChange={e => setRestockOpensAt(e.target.value)}
                                 required
-                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                                className="w-full border rounded-lg px-2 py-2 text-xs"
                                 style={css.surface}
                             />
                         </div>

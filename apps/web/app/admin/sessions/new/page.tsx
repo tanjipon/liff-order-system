@@ -73,7 +73,7 @@ export default function NewSessionPage() {
                             onChange={e => setTitle(e.target.value)}
                             required
                             placeholder="例：4月甜點預購"
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
@@ -84,7 +84,7 @@ export default function NewSessionPage() {
                             type="datetime-local"
                             value={opensAt}
                             onChange={e => setOpensAt(e.target.value)}
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
@@ -95,7 +95,7 @@ export default function NewSessionPage() {
                             type="datetime-local"
                             value={closesAt}
                             onChange={e => setClosesAt(e.target.value)}
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
@@ -108,7 +108,7 @@ export default function NewSessionPage() {
                             value={perPersonLimit}
                             onChange={e => setPerPersonLimit(e.target.value)}
                             placeholder="不填表示無限制"
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
