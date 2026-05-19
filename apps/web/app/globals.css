@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
-@import "tailwindcss";
+/* Prevent iOS Safari from zooming in when focusing input fields */
+@supports (-webkit-touch-callout: none) {
+    input, select, textarea {
+        font-size: 16px;
+    }
+}
 
 @theme {
     /* ── LIFF warm pink ── */
