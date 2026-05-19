@@ -278,10 +278,10 @@ export default function AdminDashBoard() {
                                 style={css.surface}>
 
                                 {/* 主要資訊列 */}
-                                <div className="p-4 flex flex-wrap md:flex-nowrap items-center gap-3">
+                                <div className="p-4 flex flex-wrap md:flex-nowrap items-start gap-3">
 
                                     {/* 狀態 */}
-                                    <div className="shrink-0">
+                                    <div className="shrink-0 pt-0.5">
                                         <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
                                             style={STATUS_STYLE[order.status]}>
                                             {STATUS_LABEL[order.status]}
@@ -300,7 +300,7 @@ export default function AdminDashBoard() {
                                                 {new Date(order.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </div>
-                                        <p className="text-sm mt-0.5 truncate" style={css.muted}>
+                                        <p className="text-sm mt-0.5 break-words" style={css.muted}>
                                             {order.order_items.map(i => `${i.products.name}×${i.quantity}`).join('、')}
                                         </p>
                                         <p className="text-sm font-bold" style={css.text}>NT$ {order.total_amount}</p>
@@ -401,27 +401,29 @@ export default function AdminDashBoard() {
                                     )}
 
                                     {adminNoteEditing === order.id ? (
-                                        <div className="flex gap-2 items-center">
+                                        <div className="flex flex-col gap-2">
                                             <input
                                                 type="text"
                                                 value={adminNoteInputs[order.id] ?? ''}
                                                 onChange={e => setAdminNoteInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
                                                 placeholder="店家備註（僅內部可見）"
-                                                className="flex-1 border rounded-lg px-3 py-1.5 text-xs"
+                                                className="w-full border rounded-lg px-3 py-1.5 text-xs"
                                                 style={css.surface}
                                                 autoFocus
                                             />
-                                            <button
-                                                onClick={() => saveAdminNote(order.id)}
-                                                disabled={adminNoteSaving === order.id}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0 disabled:opacity-50 ${btn.solid}`}
-                                                style={css.primary}>
-                                                {adminNoteSaving === order.id ? '儲存中...' : '儲存'}
-                                            </button>
-                                            <button
-                                                onClick={() => setAdminNoteEditing(null)}
-                                                className={`px-3 py-1.5 rounded-lg text-xs border shrink-0 ${btn.surface}`}
-                                                style={css.surface}>取消</button>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => saveAdminNote(order.id)}
+                                                    disabled={adminNoteSaving === order.id}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50 ${btn.solid}`}
+                                                    style={css.primary}>
+                                                    {adminNoteSaving === order.id ? '儲存中...' : '儲存'}
+                                                </button>
+                                                <button
+                                                    onClick={() => setAdminNoteEditing(null)}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
+                                                    style={css.surface}>取消</button>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="flex items-center justify-between gap-2">
