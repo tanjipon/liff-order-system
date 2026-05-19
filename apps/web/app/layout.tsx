@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { siteConfig } from "@/config/site";
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: siteConfig.name,
@@ -15,7 +19,7 @@ export default function RootLayout({
   return (
     <html
       lang="zh-TW"
-      className={`h-full`}
+      className={cn("h-full", "font-sans", geist.variable)}
     >
       <head>
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
