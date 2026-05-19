@@ -10,6 +10,7 @@ type Order = {
     line_display_name: string
     total_amount: number
     pickup_fee: number
+    order_number: number | null
     queue_number: number | null
     payment_method: string
     remit_last5: string | null
@@ -315,6 +316,9 @@ export default function OrderHistoryPage() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <p className="font-semibold text-sm" style={css.text}>{order.line_display_name}</p>
+                                            {order.order_number && (
+                                                <span className="text-xs font-mono" style={css.muted}>#{order.order_number}</span>
+                                            )}
                                             {order.queue_number && (
                                                 <span className="text-xs font-mono font-semibold"
                                                     style={{ color: 'var(--color-admin-primary)' }}>#{order.queue_number}</span>
