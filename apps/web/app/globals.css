@@ -9,6 +9,18 @@
     textarea {
         font-size: 16px;
     }
+
+    /* iOS Safari date/time inputs have an intrinsic minimum width that ignores
+       w-full. Force them to respect their container width. */
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="time"],
+    input[type="month"],
+    input[type="week"] {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
 }
 
 @theme {
