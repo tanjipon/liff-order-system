@@ -18,8 +18,10 @@ export async function GET(req: NextRequest) {
         let query = supabase
             .from('orders')
             .select(`
-                id, status, line_display_name, total_amount,
-                queue_number, payment_method, remit_last5, created_at,
+                id, status, line_display_name, total_amount, pickup_fee,
+                order_number, queue_number, payment_method, remit_last5, created_at,
+                customer_name, customer_phone,
+                pickup_options ( name ),
                 order_items (
                     quantity, unit_price,
                     products ( name )
@@ -48,15 +50,29 @@ export async function GET(req: NextRequest) {
     }
 }
 
+const STATUS_LABEL: Record<string, string> = {
+    pending:           '待確認',
+    in_production:     '製作中',
+    pending_payment:   '待付款',
+    payment_submitted: '付款確認中',
+    completed:         '已完成',
+    cancelled:         '已取消',
+}
+
 type OrderRow = {
     id: string
     status: string
     line_display_name: string
     total_amount: number
+    pickup_fee: number
+    order_number: number | null
     queue_number: number | null
     payment_method: string
     remit_last5: string | null
     created_at: string
+    customer_name: string
+    customer_phone: string
+    pickup_options: { name: string }[] | null
     order_items: {
         quantity: number
         unit_price: number
@@ -65,28 +81,42 @@ type OrderRow = {
 }
 
 function buildCsv(orders: OrderRow[]): string {
-    const headers = ['訂單編號', '狀態', '顧客名稱', '付款方式', '匯款後五碼', '總金額', '排單號', '商品明細', '建立時間']
-
-    const rows = orders.map(o => [
-        o.id,
-        o.status,
-        o.line_display_name,
-        o.payment_method,
-        o.remit_last5 ?? '',
-        o.total_amount,
-        o.queue_number ?? '',
-        o.order_items.map(i => `${i.products[0]?.name ?? ''}x${i.quantity}`).join('|'),
-        new Date(o.created_at).toLocaleString('zh-TW'),
-    ])
+    const headers = [
+        '訂單號碼', '排單號', '狀態', 'LINE名稱', '訂購人', '電話',
+        '取貨方式', '付款方式', '匯款後五碼',
+        '商品名稱', '數量', '單價', '小計', '總金額', '建立時間',
+    ]
 
     const escape = (v: unknown) => {
-        const s = String(v)
+        const s = String(v ?? '')
         return s.includes(',') || s.includes('"') || s.includes('\n')
             ? `"${s.replace(/"/g, '""')}"`
             : s
     }
 
-    return [headers, ...rows]
+    const itemRows: unknown[][] = []
+
+    for (const o of orders) {
+        const orderNum = o.order_number ? `#${String(o.order_number).padStart(4, '0')}` : ''
+        const queueNum = o.queue_number ?? ''
+        const status   = STATUS_LABEL[o.status] ?? o.status
+        const pickup   = o.pickup_options?.[0]?.name ?? ''
+        const payment  = o.payment_method === 'bank_transfer' ? '銀行匯款' : '現金付款'
+        const created  = new Date(o.created_at).toLocaleString('zh-TW')
+
+        for (const item of o.order_items) {
+            const productName = item.products[0]?.name ?? ''
+            const subtotal = item.unit_price * item.quantity
+
+            itemRows.push([
+                orderNum, queueNum, status, o.line_display_name, o.customer_name, o.customer_phone,
+                pickup, payment, o.remit_last5 ?? '',
+                productName, item.quantity, item.unit_price, subtotal, o.total_amount, created,
+            ])
+        }
+    }
+
+    return [headers, ...itemRows]
         .map(row => row.map(escape).join(','))
         .join('\n')
 }
