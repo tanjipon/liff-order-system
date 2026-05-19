@@ -79,7 +79,10 @@ export default function NewSessionPage() {
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>開放時間（選填）</label>
+                        <div className="flex justify-between items-center mb-1.5">
+                            <label className="text-xs font-medium" style={css.muted}>開放時間（選填）</label>
+                            {opensAt && <button type="button" onClick={() => setOpensAt('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
+                        </div>
                         <input
                             type="datetime-local"
                             value={opensAt}
@@ -90,7 +93,10 @@ export default function NewSessionPage() {
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>截止時間（選填）</label>
+                        <div className="flex justify-between items-center mb-1.5">
+                            <label className="text-xs font-medium" style={css.muted}>截止時間（選填）</label>
+                            {closesAt && <button type="button" onClick={() => setClosesAt('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
+                        </div>
                         <input
                             type="datetime-local"
                             value={closesAt}

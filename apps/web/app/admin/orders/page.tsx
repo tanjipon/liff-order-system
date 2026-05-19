@@ -189,7 +189,10 @@ export default function OrderHistoryPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:flex-1">
                         <div className="flex flex-col gap-1 min-w-0">
-                            <label className="text-xs font-medium" style={css.muted}>開始日期</label>
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-medium" style={css.muted}>開始日期</label>
+                                {dateFrom && <button type="button" onClick={() => setDateFrom('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
+                            </div>
                             <input
                                 type="date"
                                 value={dateFrom}
@@ -200,7 +203,10 @@ export default function OrderHistoryPage() {
                         </div>
 
                         <div className="flex flex-col gap-1 min-w-0">
-                            <label className="text-xs font-medium" style={css.muted}>結束日期</label>
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-medium" style={css.muted}>結束日期</label>
+                                {dateTo && <button type="button" onClick={() => setDateTo('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
+                            </div>
                             <input
                                 type="date"
                                 value={dateTo}
