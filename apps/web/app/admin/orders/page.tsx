@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { adminFetch } from '@/lib/auth/adminClient'
 import Pagination from '@/components/admin/Pagination'
-import DatePicker from '@/components/admin/DatePicker'
+import DateTimePicker from '@/components/admin/DateTimePicker'
 
 type Order = {
     id: string
@@ -195,7 +195,7 @@ export default function OrderHistoryPage() {
                                 <label className="text-xs font-medium" style={css.muted}>開始日期</label>
                                 {dateFrom && <button type="button" onClick={() => setDateFrom('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
                             </div>
-                            <DatePicker value={dateFrom} onChange={setDateFrom} />
+                            <DateTimePicker value={dateFrom} onChange={setDateFrom} />
                         </div>
 
                         <div className="flex flex-col gap-1 min-w-0">
@@ -203,7 +203,7 @@ export default function OrderHistoryPage() {
                                 <label className="text-xs font-medium" style={css.muted}>結束日期</label>
                                 {dateTo && <button type="button" onClick={() => setDateTo('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
                             </div>
-                            <DatePicker value={dateTo} onChange={setDateTo} />
+                            <DateTimePicker value={dateTo} onChange={setDateTo} />
                         </div>
                     </div>
                 </div>
