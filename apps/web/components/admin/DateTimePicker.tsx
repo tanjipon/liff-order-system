@@ -47,6 +47,7 @@ export default function DateTimePicker({ value, onChange, required }: Props) {
             dateFormat="yyyy/MM/dd HH:mm"
             placeholderText="選擇日期時間"
             customInput={<input style={inputStyle} required={required} readOnly />}
+            wrapperClassName="w-full"
             popperPlacement="bottom-start"
             isClearable={false}
         />

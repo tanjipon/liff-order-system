@@ -31,6 +31,7 @@ export default function DatePicker({ value, onChange, placeholder }: Props) {
             dateFormat="yyyy/MM/dd"
             placeholderText={placeholder ?? '選擇日期'}
             customInput={<input style={inputStyle} readOnly />}
+            wrapperClassName="w-full"
             popperPlacement="bottom-start"
             isClearable={false}
         />
