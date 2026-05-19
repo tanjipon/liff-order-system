@@ -1,18 +1,5 @@
 @import "tailwindcss";
 
-/* iOS Safari date/time inputs have an intrinsic minimum width that causes
-   overflow. Force them to respect their container width globally. */
-input[type="date"],
-input[type="datetime-local"],
-input[type="time"],
-input[type="month"],
-input[type="week"] {
-    -webkit-min-logical-width: 0;
-    min-width: 0;
-    width: 100%;
-    box-sizing: border-box;
-}
-
 /* Prevent iOS Safari from zooming in when focusing text input fields.
    Date/time inputs are excluded — they open a native picker (no keyboard)
    so they never trigger zoom. */

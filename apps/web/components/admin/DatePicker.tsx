@@ -27,7 +27,7 @@ export default function DatePicker({ value, onChange, placeholder }: Props) {
     return (
         <ReactDatePicker
             selected={selected}
-            onChange={date => onChange(date ? date.toLocaleDateString('sv-SE') : '')}
+            onChange={(date: Date | null) => onChange(date ? date.toLocaleDateString('sv-SE') : '')}
             dateFormat="yyyy/MM/dd"
             placeholderText={placeholder ?? '選擇日期'}
             customInput={<input style={inputStyle} readOnly />}
