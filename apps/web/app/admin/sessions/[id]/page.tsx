@@ -491,7 +491,7 @@ export default function SessionDetailPage() {
                                 value={restockOpensAt}
                                 onChange={e => setRestockOpensAt(e.target.value)}
                                 required
-                                className="w-full border rounded-lg px-2 py-2 text-xs"
+                                className="w-full max-w-full border rounded-lg px-2 py-2 text-xs"
                                 style={css.surface}
                             />
                         </div>

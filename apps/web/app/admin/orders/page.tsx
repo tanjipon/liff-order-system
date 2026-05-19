@@ -187,7 +187,7 @@ export default function OrderHistoryPage() {
                         </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 md:flex-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:flex-1">
                         <div className="flex flex-col gap-1 min-w-0">
                             <label className="text-xs font-medium" style={css.muted}>開始日期</label>
                             <input

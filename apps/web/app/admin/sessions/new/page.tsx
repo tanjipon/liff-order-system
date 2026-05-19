@@ -84,7 +84,7 @@ export default function NewSessionPage() {
                             type="datetime-local"
                             value={opensAt}
                             onChange={e => setOpensAt(e.target.value)}
-                            className="w-full border rounded-lg px-2 py-2 text-xs"
+                            className="w-full max-w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
@@ -95,7 +95,7 @@ export default function NewSessionPage() {
                             type="datetime-local"
                             value={closesAt}
                             onChange={e => setClosesAt(e.target.value)}
-                            className="w-full border rounded-lg px-2 py-2 text-xs"
+                            className="w-full max-w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
