@@ -317,7 +317,7 @@ export default function OrderHistoryPage() {
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <p className="font-semibold text-sm" style={css.text}>{order.line_display_name}</p>
                                             {order.order_number && (
-                                                <span className="text-xs font-mono" style={css.muted}>#{order.order_number}</span>
+                                                <span className="text-xs font-mono" style={css.muted}>#{String(order.order_number).padStart(4, '0')}</span>
                                             )}
                                             {order.queue_number && (
                                                 <span className="text-xs font-mono font-semibold"
