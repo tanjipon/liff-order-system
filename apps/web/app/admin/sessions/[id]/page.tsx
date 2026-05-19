@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
+import DateTimePicker from '@/components/admin/DateTimePicker'
 import AdminError from '@/components/admin/AdminError'
 import ProductImageStrip, { ImageLink } from '@/components/admin/ProductImageStrip'
 import { useMinLoading } from '@/hooks/useMinLoading'
@@ -486,14 +487,7 @@ export default function SessionDetailPage() {
                     <form onSubmit={handleAddRestock} className="space-y-4">
                         <div>
                             <label className="block text-xs font-medium mb-1" style={css.muted}>開放時間 *</label>
-                            <input
-                                type="datetime-local"
-                                value={restockOpensAt}
-                                onChange={e => setRestockOpensAt(e.target.value)}
-                                required
-                                className="w-full max-w-full border rounded-lg px-2 py-2 text-xs"
-                                style={css.surface}
-                            />
+                            <DateTimePicker value={restockOpensAt} onChange={setRestockOpensAt} required />
                         </div>
                         <div>
                             <label className="block text-xs font-medium mb-2" style={css.muted}>

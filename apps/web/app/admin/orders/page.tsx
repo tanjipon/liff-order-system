@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { adminFetch } from '@/lib/auth/adminClient'
 import Pagination from '@/components/admin/Pagination'
+import DatePicker from '@/components/admin/DatePicker'
 
 type Order = {
     id: string
@@ -194,13 +195,7 @@ export default function OrderHistoryPage() {
                                 <label className="text-xs font-medium" style={css.muted}>開始日期</label>
                                 {dateFrom && <button type="button" onClick={() => setDateFrom('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
                             </div>
-                            <input
-                                type="date"
-                                value={dateFrom}
-                                onChange={e => setDateFrom(e.target.value)}
-                                className="border rounded-lg px-2 py-2 text-xs w-full min-w-0"
-                                style={css.surface}
-                            />
+                            <DatePicker value={dateFrom} onChange={setDateFrom} />
                         </div>
 
                         <div className="flex flex-col gap-1 min-w-0">
@@ -208,13 +203,7 @@ export default function OrderHistoryPage() {
                                 <label className="text-xs font-medium" style={css.muted}>結束日期</label>
                                 {dateTo && <button type="button" onClick={() => setDateTo('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
                             </div>
-                            <input
-                                type="date"
-                                value={dateTo}
-                                onChange={e => setDateTo(e.target.value)}
-                                className="border rounded-lg px-2 py-2 text-xs w-full min-w-0"
-                                style={css.surface}
-                            />
+                            <DatePicker value={dateTo} onChange={setDateTo} />
                         </div>
                     </div>
                 </div>

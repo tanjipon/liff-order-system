@@ -19,9 +19,11 @@
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
     "@line/liff": "^2.29.0",
     "@supabase/supabase-js": "^2.103.0",
+    "@types/react-datepicker": "^6.2.0",
     "lucide-react": "^1.14.0",
     "next": "^16.2.3",
     "react": "19.2.4",
+    "react-datepicker": "^9.1.0",
     "react-dom": "19.2.4",
     "react-easy-crop": "^5.5.7",
     "react-icons": "^5.6.0"

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
+import DateTimePicker from '@/components/admin/DateTimePicker'
 import Link from 'next/link'
 
 const css = {
@@ -116,13 +117,7 @@ export default function EditSessionPage() {
                             <label className="text-xs font-medium" style={css.muted}>開放時間（選填）</label>
                             {opensAt && <button type="button" onClick={() => setOpensAt('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
                         </div>
-                        <input
-                            type="datetime-local"
-                            value={opensAt}
-                            onChange={e => setOpensAt(e.target.value)}
-                            className="w-full max-w-full border rounded-lg px-2 py-2 text-xs"
-                            style={css.surface}
-                        />
+                        <DateTimePicker value={opensAt} onChange={setOpensAt} />
                     </div>
 
                     <div>
@@ -130,13 +125,7 @@ export default function EditSessionPage() {
                             <label className="text-xs font-medium" style={css.muted}>截止時間（選填）</label>
                             {closesAt && <button type="button" onClick={() => setClosesAt('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
                         </div>
-                        <input
-                            type="datetime-local"
-                            value={closesAt}
-                            onChange={e => setClosesAt(e.target.value)}
-                            className="w-full max-w-full border rounded-lg px-2 py-2 text-xs"
-                            style={css.surface}
-                        />
+                        <DateTimePicker value={closesAt} onChange={setClosesAt} />
                     </div>
 
                     <div>
