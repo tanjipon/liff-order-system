@@ -11,6 +11,11 @@
     textarea {
         font-size: 16px;
     }
+
+    /* Date/DateTime picker trigger buttons: use 14px on iOS for better readability */
+    .admin-picker-trigger {
+        font-size: 14px;
+    }
 }
 
 @theme {
