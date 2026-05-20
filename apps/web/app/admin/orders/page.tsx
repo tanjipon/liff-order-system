@@ -314,7 +314,7 @@ export default function OrderHistoryPage() {
                                             )}
                                             <span className="text-xs" style={css.muted}>
                                                 {new Date(order.created_at).toLocaleString('zh-TW', {
-                                                    month: 'numeric', day: 'numeric',
+                                                    year: 'numeric', month: 'numeric', day: 'numeric',
                                                     hour: '2-digit', minute: '2-digit'
                                                 })}
                                             </span>
