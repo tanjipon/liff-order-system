@@ -179,7 +179,7 @@ export default function OrderHistoryPage() {
                         <select
                             value={status}
                             onChange={e => setStatus(e.target.value)}
-                            className="border rounded-lg px-3 py-2 text-sm w-full cursor-pointer"
+                            className="border rounded-lg px-3 py-2 text-xs w-full cursor-pointer"
                             style={css.surface}
                         >
                             <option value="">所有狀態</option>
@@ -214,7 +214,7 @@ export default function OrderHistoryPage() {
                         <select
                             value={sessionId}
                             onChange={e => setSessionId(e.target.value)}
-                            className="border rounded-lg px-3 py-2 text-sm w-full cursor-pointer"
+                            className="border rounded-lg px-3 py-2 text-xs w-full cursor-pointer"
                             style={css.surface}
                         >
                             <option value="">所有開單</option>
@@ -230,7 +230,7 @@ export default function OrderHistoryPage() {
                             value={productId}
                             onChange={e => setProductId(e.target.value)}
                             disabled={!sessionId}
-                            className="border rounded-lg px-3 py-2 text-sm w-full disabled:opacity-40 cursor-pointer"
+                            className="border rounded-lg px-3 py-2 text-xs w-full disabled:opacity-40 cursor-pointer"
                             style={css.surface}
                         >
                             <option value="">所有商品</option>
@@ -319,9 +319,13 @@ export default function OrderHistoryPage() {
                                                 })}
                                             </span>
                                         </div>
-                                        <p className="text-xs mt-0.5 truncate" style={css.muted}>
-                                            {order.order_items.map(i => `${i.products.name}×${i.quantity}`).join('、')}
-                                        </p>
+                                        <div className="mt-0.5 space-y-0.5">
+                                            {order.order_items.map((i, idx) => (
+                                                <p key={idx} className="text-xs" style={css.muted}>
+                                                    {i.products.name} × {i.quantity}
+                                                </p>
+                                            ))}
+                                        </div>
                                     </div>
 
                                     {/* Amount + expand indicator */}

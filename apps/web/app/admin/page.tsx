@@ -300,9 +300,13 @@ export default function AdminDashBoard() {
                                                 {new Date(order.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </div>
-                                        <p className="text-sm mt-0.5 break-words" style={css.muted}>
-                                            {order.order_items.map(i => `${i.products.name}×${i.quantity}`).join('、')}
-                                        </p>
+                                        <div className="mt-0.5 space-y-0.5">
+                                            {order.order_items.map((i, idx) => (
+                                                <p key={idx} className="text-sm" style={css.muted}>
+                                                    {i.products.name} × {i.quantity}
+                                                </p>
+                                            ))}
+                                        </div>
                                         <p className="text-sm font-bold" style={css.text}>NT$ {order.total_amount}</p>
                                         {order.payment_method === 'bank_transfer' && order.remit_last5 && (
                                             <span className="text-xs px-2 py-0.5 rounded-full"
