@@ -459,10 +459,14 @@ function OrderPageInner() {
     // ── Step 4: Contact info ──────────────────────────────────
     if (step === 'contact') {
         const requiresAddress = selectedPickup?.requires_address ?? false
+        // 台灣手機 09xxxxxxxx 或市話 0x-xxxxxxxx / 0x xxxxxxxx（允許空格或連字號）
+        const phoneRegex = /^0[0-9]{1,2}[-\s]?[0-9]{3,4}[-\s]?[0-9]{4}$/
+        const customerPhoneValid = phoneRegex.test(customerPhone.trim())
+        const recipientPhoneValid = sameAsCustomer || phoneRegex.test(recipientPhone.trim())
         const contactValid =
             customerName.trim() !== '' &&
-            customerPhone.trim() !== '' &&
-            (sameAsCustomer || (recipientName.trim() !== '' && recipientPhone.trim() !== '')) &&
+            customerPhoneValid &&
+            (sameAsCustomer || (recipientName.trim() !== '' && recipientPhoneValid)) &&
             (!requiresAddress || (recipientAddress.city !== '' && recipientAddress.district !== '' && recipientAddress.street.trim() !== ''))
 
         return (
@@ -489,11 +493,14 @@ function OrderPageInner() {
                             <input
                                 value={customerPhone}
                                 onChange={e => setCustomerPhone(e.target.value)}
-                                placeholder="電話"
+                                placeholder="0912345678"
                                 type="tel"
                                 className={S.input}
                                 style={css.surface}
                             />
+                            {customerPhone.trim() !== '' && !customerPhoneValid && (
+                                <p className="text-xs mt-1" style={{ color: '#DC2626' }}>請輸入有效的手機號碼</p>
+                            )}
                         </div>
                     </div>
 
@@ -527,11 +534,14 @@ function OrderPageInner() {
                                 <input
                                     value={recipientPhone}
                                     onChange={e => setRecipientPhone(e.target.value)}
-                                    placeholder="電話"
+                                    placeholder="0912345678"
                                     type="tel"
                                     className={S.input}
                                     style={css.surface}
                                 />
+                                {recipientPhone.trim() !== '' && !recipientPhoneValid && (
+                                    <p className="text-xs mt-1" style={{ color: '#DC2626' }}>請輸入有效的手機號碼</p>
+                                )}
                             </div>
                         </div>
                     )}
