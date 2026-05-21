@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: '*.r2.cloudflarestorage.com'
+        hostname: 'ditto-cake-images.tanji.io'
       }
     ],
   },
