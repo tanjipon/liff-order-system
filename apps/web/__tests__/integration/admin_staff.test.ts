@@ -43,7 +43,7 @@ beforeAll(async () => {
     const { data } = await supabase
         .from('roles')
         .select('id')
-        .eq('name', 'assistant')
+        .eq('name', '助手')
         .single()
     assistantRoleId = data!.id
 })
