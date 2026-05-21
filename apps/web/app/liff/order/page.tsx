@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
-import { CheckCircle } from 'lucide-react'
+import { useLiff } from '@/components/liff/LiffProvider'
+import { CheckCircle, MinusCircle, PlusCircle } from 'lucide-react'
 import ProductGallery from '@/components/liff/ProductGallery'
 import AddressInput, { type AddressParts, EMPTY_ADDRESS } from '@/components/liff/AddressInput'
 import { formatAddress } from '@/lib/twAddress'
@@ -75,10 +76,11 @@ const css = {
     successBg: { backgroundColor: '#ECFDF5', color: '#065F46' },
 } as const
 
-export default function OrderPage() {
+function OrderPageInner() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const sessionId = searchParams.get('sessionId')
+    const { ready, token, error: liffError } = useLiff()
 
     const [session, setSession] = useState<Session | null>(null)
     const [quantities, setQuantities] = useState<Record<string, number>>({})
@@ -105,7 +107,7 @@ export default function OrderPage() {
 
     const [now, setNow] = useState(() => Date.now())
     const { combine } = useMinLoading(1500)
-    const isLoading = combine(dataLoaded)
+    const isLoading = combine(dataLoaded) || !ready
 
     const activeUrl = sessionId
         ? `/api/sessions/active?sessionId=${sessionId}`
@@ -126,6 +128,12 @@ export default function OrderPage() {
     }, [now, session?.next_restock_at])
 
     useEffect(() => {
+        if (!ready) return
+        if (!token) {
+            setError(liffError ?? '請透過 LINE 開啟此頁面')
+            setDataLoaded(true)
+            return
+        }
         fetch(activeUrl)
             .then(res => res.json())
             .then(body => {
@@ -134,7 +142,7 @@ export default function OrderPage() {
                     const init: Record<string, number> = {}
                     body.data.products.forEach((p: Product) => { init[p.id] = 0 })
                     setQuantities(init)
-                    fetch('/api/orders', { headers: { 'x-liff-token': 'mock-token' } })
+                    fetch('/api/orders', { headers: { 'x-liff-token': token } })
                         .then(res => res.json())
                         .then(body => {
                             if (body.data) {
@@ -157,7 +165,7 @@ export default function OrderPage() {
             })
             .catch(() => setError('載入失敗，請稍後再試'))
             .finally(() => setDataLoaded(true))
-    }, [])
+    }, [ready, token])
 
     useEffect(() => {
         if (step === 'pickup' && pickupOptions.length === 0) {
@@ -230,7 +238,7 @@ export default function OrderPage() {
         try {
             const res = await fetch('/api/orders', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-liff-token': 'mock-token' },
+                headers: { 'Content-Type': 'application/json', 'x-liff-token': token ?? '' },
                 body: JSON.stringify({
                     sessionId: session!.id,
                     items: session!.products
@@ -321,9 +329,9 @@ export default function OrderPage() {
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => updateQuantity(product.id, -1, product.stock_qty, product.max_per_person)}
-                                        className="w-8 h-8 rounded-full border flex items-center justify-center text-base font-bold"
-                                        style={css.surface}
-                                    >−</button>
+                                    >
+                                        <MinusCircle className="w-6 h-6" style={css.muted} />
+                                    </button>
                                     {/* 固定寬度：tabular-nums 確保等寬數字 */}
                                     <span className="w-8 text-center text-sm font-medium tabular-nums" style={css.text}>
                                         {quantities[product.id] ?? 0}
@@ -335,9 +343,10 @@ export default function OrderPage() {
                                             (session.per_person_limit !== null && totalSelected >= session.per_person_limit) ||
                                             (product.max_per_person !== null && (quantities[product.id] ?? 0) >= product.max_per_person - (productQuotaUsed[product.id] ?? 0))
                                         }
-                                        className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold text-white disabled:opacity-40"
-                                        style={css.primary}
-                                    >+</button>
+                                        className="disabled:opacity-40"
+                                    >
+                                        <PlusCircle className="w-6 h-6" style={css.accent} />
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -450,10 +459,14 @@ export default function OrderPage() {
     // ── Step 4: Contact info ──────────────────────────────────
     if (step === 'contact') {
         const requiresAddress = selectedPickup?.requires_address ?? false
+        // 台灣手機 09xxxxxxxx 或市話 0x-xxxxxxxx / 0x xxxxxxxx（允許空格或連字號）
+        const phoneRegex = /^0[0-9]{1,2}[-\s]?[0-9]{3,4}[-\s]?[0-9]{4}$/
+        const customerPhoneValid = phoneRegex.test(customerPhone.trim())
+        const recipientPhoneValid = sameAsCustomer || phoneRegex.test(recipientPhone.trim())
         const contactValid =
             customerName.trim() !== '' &&
-            customerPhone.trim() !== '' &&
-            (sameAsCustomer || (recipientName.trim() !== '' && recipientPhone.trim() !== '')) &&
+            customerPhoneValid &&
+            (sameAsCustomer || (recipientName.trim() !== '' && recipientPhoneValid)) &&
             (!requiresAddress || (recipientAddress.city !== '' && recipientAddress.district !== '' && recipientAddress.street.trim() !== ''))
 
         return (
@@ -480,11 +493,14 @@ export default function OrderPage() {
                             <input
                                 value={customerPhone}
                                 onChange={e => setCustomerPhone(e.target.value)}
-                                placeholder="電話"
+                                placeholder="0912345678"
                                 type="tel"
                                 className={S.input}
                                 style={css.surface}
                             />
+                            {customerPhone.trim() !== '' && !customerPhoneValid && (
+                                <p className="text-xs mt-1" style={{ color: '#DC2626' }}>請輸入有效的手機號碼</p>
+                            )}
                         </div>
                     </div>
 
@@ -518,11 +534,14 @@ export default function OrderPage() {
                                 <input
                                     value={recipientPhone}
                                     onChange={e => setRecipientPhone(e.target.value)}
-                                    placeholder="電話"
+                                    placeholder="0912345678"
                                     type="tel"
                                     className={S.input}
                                     style={css.surface}
                                 />
+                                {recipientPhone.trim() !== '' && !recipientPhoneValid && (
+                                    <p className="text-xs mt-1" style={{ color: '#DC2626' }}>請輸入有效的手機號碼</p>
+                                )}
                             </div>
                         </div>
                     )}
@@ -634,4 +653,12 @@ export default function OrderPage() {
     }
 
     return null
+}
+
+export default function OrderPage() {
+    return (
+        <Suspense>
+            <OrderPageInner />
+        </Suspense>
+    )
 }

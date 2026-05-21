@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { adminFetch } from '@/lib/auth/adminClient'
 import Pagination from '@/components/admin/Pagination'
+import DateTimePicker from '@/components/admin/DateTimePicker'
 
 type Order = {
     id: string
@@ -10,6 +11,7 @@ type Order = {
     line_display_name: string
     total_amount: number
     pickup_fee: number
+    order_number: number | null
     queue_number: number | null
     payment_method: string
     remit_last5: string | null
@@ -169,7 +171,7 @@ export default function OrderHistoryPage() {
             </div>
 
             {/* 篩選列 */}
-            <div className="rounded-xl border p-4 mb-6 space-y-3" style={css.surface}>
+            <div className="rounded-xl border p-4 mb-6 space-y-3 overflow-hidden" style={css.surface}>
                 {/* 電腦版同一列，手機版狀態獨一列、日期獨一列 */}
                 <div className="flex flex-col md:flex-row gap-3">
                     <div className="flex flex-col gap-1 md:flex-1">
@@ -177,7 +179,7 @@ export default function OrderHistoryPage() {
                         <select
                             value={status}
                             onChange={e => setStatus(e.target.value)}
-                            className="border rounded-lg px-3 py-2 text-sm w-full cursor-pointer"
+                            className="border rounded-lg px-3 py-2 text-xs w-full cursor-pointer"
                             style={css.surface}
                         >
                             <option value="">所有狀態</option>
@@ -187,27 +189,21 @@ export default function OrderHistoryPage() {
                         </select>
                     </div>
 
-                    <div className="flex gap-3 md:flex-1">
-                        <div className="flex flex-col gap-1 flex-1">
-                            <label className="text-xs font-medium" style={css.muted}>開始日期</label>
-                            <input
-                                type="date"
-                                value={dateFrom}
-                                onChange={e => setDateFrom(e.target.value)}
-                                className="border rounded-lg px-3 py-2 text-sm w-full"
-                                style={css.surface}
-                            />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:flex-1">
+                        <div className="flex flex-col gap-1 min-w-0">
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-medium" style={css.muted}>開始日期</label>
+                                {dateFrom && <button type="button" onClick={() => setDateFrom('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
+                            </div>
+                            <DateTimePicker value={dateFrom} onChange={setDateFrom} />
                         </div>
 
-                        <div className="flex flex-col gap-1 flex-1">
-                            <label className="text-xs font-medium" style={css.muted}>結束日期</label>
-                            <input
-                                type="date"
-                                value={dateTo}
-                                onChange={e => setDateTo(e.target.value)}
-                                className="border rounded-lg px-3 py-2 text-sm w-full"
-                                style={css.surface}
-                            />
+                        <div className="flex flex-col gap-1 min-w-0">
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-medium" style={css.muted}>結束日期</label>
+                                {dateTo && <button type="button" onClick={() => setDateTo('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
+                            </div>
+                            <DateTimePicker value={dateTo} onChange={setDateTo} />
                         </div>
                     </div>
                 </div>
@@ -218,7 +214,7 @@ export default function OrderHistoryPage() {
                         <select
                             value={sessionId}
                             onChange={e => setSessionId(e.target.value)}
-                            className="border rounded-lg px-3 py-2 text-sm w-full cursor-pointer"
+                            className="border rounded-lg px-3 py-2 text-xs w-full cursor-pointer"
                             style={css.surface}
                         >
                             <option value="">所有開單</option>
@@ -234,7 +230,7 @@ export default function OrderHistoryPage() {
                             value={productId}
                             onChange={e => setProductId(e.target.value)}
                             disabled={!sessionId}
-                            className="border rounded-lg px-3 py-2 text-sm w-full disabled:opacity-40 cursor-pointer"
+                            className="border rounded-lg px-3 py-2 text-xs w-full disabled:opacity-40 cursor-pointer"
                             style={css.surface}
                         >
                             <option value="">所有商品</option>
@@ -309,20 +305,27 @@ export default function OrderHistoryPage() {
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <p className="font-semibold text-sm" style={css.text}>{order.line_display_name}</p>
+                                            {order.order_number && (
+                                                <span className="text-xs font-mono" style={css.muted}>#{String(order.order_number).padStart(4, '0')}</span>
+                                            )}
                                             {order.queue_number && (
                                                 <span className="text-xs font-mono font-semibold"
                                                     style={{ color: 'var(--color-admin-primary)' }}>#{order.queue_number}</span>
                                             )}
                                             <span className="text-xs" style={css.muted}>
                                                 {new Date(order.created_at).toLocaleString('zh-TW', {
-                                                    month: 'numeric', day: 'numeric',
+                                                    year: 'numeric', month: 'numeric', day: 'numeric',
                                                     hour: '2-digit', minute: '2-digit'
                                                 })}
                                             </span>
                                         </div>
-                                        <p className="text-xs mt-0.5 truncate" style={css.muted}>
-                                            {order.order_items.map(i => `${i.products.name}×${i.quantity}`).join('、')}
-                                        </p>
+                                        <div className="mt-0.5 space-y-0.5">
+                                            {order.order_items.map((i, idx) => (
+                                                <p key={idx} className="text-xs" style={css.muted}>
+                                                    {i.products.name} × {i.quantity}
+                                                </p>
+                                            ))}
+                                        </div>
                                     </div>
 
                                     {/* Amount + expand indicator */}

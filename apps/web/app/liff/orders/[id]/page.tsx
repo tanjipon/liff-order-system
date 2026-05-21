@@ -5,13 +5,14 @@ import { useParams, useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
+import { useLiff } from '@/components/liff/LiffProvider'
 import { Clock, CheckCircle, PlusCircle, MinusCircle } from 'lucide-react'
 
 type OrderItem = {
     quantity: number
     unit_price: number
     product_id: string
-    products: { name: string }
+    products: { name: string; max_per_person: number | null; stock_qty: number }
 }
 
 type Order = {
@@ -30,7 +31,7 @@ type Order = {
     recipient_name: string
     recipient_phone: string
     recipient_address: string | null
-    sessions: { title: string } | null
+    sessions: { title: string; per_person_limit: number | null } | null
     pickup_options: { name: string; description: string | null } | null
     order_items: OrderItem[]
 }
@@ -67,6 +68,7 @@ const css = {
 export default function OrderDetailPage() {
     const { id } = useParams<{ id: string }>()
     const router = useRouter()
+    const { ready, token, error: liffError } = useLiff()
 
     const [order, setOrder] = useState<Order | null>(null)
     const [settings, setSettings] = useState<Record<string, string>>({})
@@ -84,11 +86,17 @@ export default function OrderDetailPage() {
     const [noteSaving, setNoteSaving] = useState(false)
 
     const { combine } = useMinLoading(1000)
-    const isLoading = combine(dataLoaded)
+    const isLoading = combine(dataLoaded) || !ready
 
     useEffect(() => {
+        if (!ready) return
+        if (!token) {
+            setError(liffError ?? '請透過 LINE 開啟此頁面')
+            setDataLoaded(true)
+            return
+        }
         Promise.all([
-            fetch(`/api/orders/${id}`, { headers: { 'x-liff-token': 'mock-token' } }).then(r => r.json()),
+            fetch(`/api/orders/${id}`, { headers: { 'x-liff-token': token } }).then(r => r.json()),
             fetch('/api/settings').then(r => r.json()),
         ])
             .then(([orderBody, settingsBody]) => {
@@ -101,7 +109,7 @@ export default function OrderDetailPage() {
             })
             .catch(() => setError('載入失敗，請稍後再試'))
             .finally(() => setDataLoaded(true))
-    }, [id])
+    }, [id, ready, token])
 
     function startEdit() {
         if (!order) return
@@ -122,7 +130,7 @@ export default function OrderDetailPage() {
 
             const res = await fetch(`/api/orders/${order.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'x-liff-token': 'mock-token' },
+                headers: { 'Content-Type': 'application/json', 'x-liff-token': token ?? '' },
                 body: JSON.stringify({ items })
             })
             if (!res.ok) {
@@ -144,7 +152,7 @@ export default function OrderDetailPage() {
         try {
             const res = await fetch(`/api/orders/${order.id}`, {
                 method: 'DELETE',
-                headers: { 'x-liff-token': 'mock-token' }
+                headers: { 'x-liff-token': token ?? '' }
             })
             if (!res.ok) {
                 const body = await res.json()
@@ -165,7 +173,7 @@ export default function OrderDetailPage() {
         try {
             await fetch(`/api/orders/${order.id}/note`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'x-liff-token': 'mock-token' },
+                headers: { 'Content-Type': 'application/json', 'x-liff-token': token ?? '' },
                 body: JSON.stringify({ note: noteInput.trim() || null })
             })
             setOrder({ ...order, customer_note: noteInput.trim() || null })
@@ -184,7 +192,7 @@ export default function OrderDetailPage() {
         try {
             const res = await fetch(`/api/orders/${order.id}/remit`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'x-liff-token': 'mock-token' },
+                headers: { 'Content-Type': 'application/json', 'x-liff-token': token ?? '' },
                 body: JSON.stringify({ remitLast5: trimmed })
             })
             if (!res.ok) {
@@ -204,6 +212,9 @@ export default function OrderDetailPage() {
     if (error && !order) return <LiffError error={error} backHref="/liff/status" />
 
     if (!order) return null
+
+    const perPersonLimit = order.sessions?.per_person_limit ?? null
+    const totalEditQty = Object.values(editQuantities).reduce((s, q) => s + q, 0)
 
     return (
         <div className="min-h-screen w-full" style={css.bg}>
@@ -289,28 +300,55 @@ export default function OrderDetailPage() {
 
                         {editingMode ? (
                             <div className="space-y-2">
-                                {order.order_items.map(item => (
+                                {perPersonLimit && (
+                                    <p className="text-xs mb-1" style={
+                                        totalEditQty > perPersonLimit ? { color: '#C0392B' } : css.muted
+                                    }>
+                                        每人限購 {perPersonLimit} 件・已選 {totalEditQty} 件
+                                    </p>
+                                )}
+                                {order.order_items.map(item => {
+                                    const qty = editQuantities[item.products.name] ?? 0
+                                    const maxStock = item.products.stock_qty + item.quantity // 加回自己原本佔的庫存
+                                    const maxPerProduct = item.products.max_per_person
+                                    const maxByLimit = perPersonLimit !== null
+                                        ? perPersonLimit - (totalEditQty - qty)
+                                        : Infinity
+                                    const effectiveMax = Math.min(
+                                        maxStock,
+                                        maxPerProduct ?? Infinity,
+                                        maxByLimit
+                                    )
+                                    return (
                                     <div key={item.product_id} className="flex items-center justify-between text-sm">
-                                        <span style={css.text}>{item.products.name}</span>
+                                        <div>
+                                            <span style={css.text}>{item.products.name}</span>
+                                            {maxPerProduct && (
+                                                <p className="text-xs" style={css.muted}>單品限購 {maxPerProduct} 件</p>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => setEditQuantities(prev => ({
                                                     ...prev,
-                                                    [item.products.name]: Math.max(0, (prev[item.products.name] ?? 0) - 1)
+                                                    [item.products.name]: Math.max(0, qty - 1)
                                                 }))}
                                             ><MinusCircle className="w-7 h-7" style={css.muted} /></button>
                                             <span className="w-8 text-center tabular-nums text-sm font-medium" style={css.text}>
-                                                {editQuantities[item.products.name] ?? 0}
+                                                {qty}
                                             </span>
                                             <button
+                                                disabled={qty >= effectiveMax}
                                                 onClick={() => setEditQuantities(prev => ({
                                                     ...prev,
-                                                    [item.products.name]: (prev[item.products.name] ?? 0) + 1
+                                                    [item.products.name]: qty + 1
                                                 }))}
+                                                style={{ opacity: qty >= effectiveMax ? 0.4 : 1 }}
                                             ><PlusCircle className="w-7 h-7" style={{ color: 'var(--color-liff-primary)' }} /></button>
                                         </div>
                                     </div>
-                                ))}
+                                    )
+                                })}
                                 <div className="flex gap-2 mt-3">
                                     <button
                                         onClick={submitEdit}

@@ -1,7 +1,7 @@
 -- 1. Create default  role
 insert into roles (id, name) values
-    ('00000000-0000-0000-0000-000000000001', 'owner'),
-    ('00000000-0000-0000-0000-000000000002', 'assistant');
+    ('00000000-0000-0000-0000-000000000001', '管理員'),
+    ('00000000-0000-0000-0000-000000000002', '助手');
 
 -- 2. Create permissions
 insert into permissions (id, key, name) values

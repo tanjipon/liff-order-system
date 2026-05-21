@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import Link from 'next/link'
+import DateTimePicker from '@/components/admin/DateTimePicker'
 
 const css = {
     surface: { backgroundColor: 'var(--color-admin-surface)', borderColor: 'var(--color-admin-border)' },
@@ -73,31 +74,25 @@ export default function NewSessionPage() {
                             onChange={e => setTitle(e.target.value)}
                             required
                             placeholder="例：4月甜點預購"
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>開放時間（選填）</label>
-                        <input
-                            type="datetime-local"
-                            value={opensAt}
-                            onChange={e => setOpensAt(e.target.value)}
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
-                            style={css.surface}
-                        />
+                        <div className="flex justify-between items-center mb-1.5">
+                            <label className="text-xs font-medium" style={css.muted}>開放時間（選填）</label>
+                            {opensAt && <button type="button" onClick={() => setOpensAt('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
+                        </div>
+                        <DateTimePicker value={opensAt} onChange={setOpensAt} />
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium mb-1.5" style={css.muted}>截止時間（選填）</label>
-                        <input
-                            type="datetime-local"
-                            value={closesAt}
-                            onChange={e => setClosesAt(e.target.value)}
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
-                            style={css.surface}
-                        />
+                        <div className="flex justify-between items-center mb-1.5">
+                            <label className="text-xs font-medium" style={css.muted}>截止時間（選填）</label>
+                            {closesAt && <button type="button" onClick={() => setClosesAt('')} className="text-xs cursor-pointer" style={css.muted}>清除</button>}
+                        </div>
+                        <DateTimePicker value={closesAt} onChange={setClosesAt} />
                     </div>
 
                     <div>
@@ -108,7 +103,7 @@ export default function NewSessionPage() {
                             value={perPersonLimit}
                             onChange={e => setPerPersonLimit(e.target.value)}
                             placeholder="不填表示無限制"
-                            className="w-full border rounded-lg px-3 py-2 text-sm"
+                            className="w-full border rounded-lg px-2 py-2 text-xs"
                             style={css.surface}
                         />
                     </div>

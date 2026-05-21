@@ -264,10 +264,14 @@ create or replace function update_order(
     p_items         jsonb
 ) returns void language plpgsql as $$
 declare
-    v_order     record;
-    v_item      jsonb;
-    v_product   record;
-    v_total     int := 0;
+    v_order         record;
+    v_session       record;
+    v_item          jsonb;
+    v_product       record;
+    v_total         int := 0;
+    v_new_total_qty int := 0;
+    v_other_qty     int := 0;
+    v_item_qty      int;
 begin
     -- 1. lock order, validate owner and status to be pending
     select * into v_order from orders
@@ -282,14 +286,19 @@ begin
         raise exception 'INVALID_TRANSITION';
     end if;
 
-    -- 2. update stock
+    -- 2. get session limits
+    select per_person_limit into v_session
+    from sessions
+    where id = v_order.session_id;
+
+    -- 3. restore stock from current order items
     update products p
     set stock_qty = p.stock_qty + oi.quantity
     from order_items oi
     where oi.order_id = p_order_id
         and oi.product_id = p.id;
 
-    -- 3. selete order items
+    -- 4. delete current order items
     delete from order_items where order_id = p_order_id;
 
     -- check new items is not zero
@@ -297,9 +306,31 @@ begin
         raise exception 'ORDER_ITEMS_EMPTY';
     end if;
 
-    -- 4. update stock and add new items
+    -- 5. calculate new total quantity
+    select coalesce(sum((el->>'quantity')::int), 0)
+    into v_new_total_qty
+    from jsonb_array_elements(p_items) as el;
+
+    -- 6. check per_person_limit: sum of other active orders + new total
+    if v_session.per_person_limit is not null then
+        select coalesce(sum(oi.quantity), 0) into v_other_qty
+        from orders o
+        join order_items oi on oi.order_id = o.id
+        where o.line_user_id = p_line_user_id
+            and o.session_id = v_order.session_id
+            and o.id != p_order_id
+            and o.status != 'cancelled';
+
+        if v_other_qty + v_new_total_qty > v_session.per_person_limit then
+            raise exception 'QUOTA_EXCEEDED';
+        end if;
+    end if;
+
+    -- 7. insert new items with stock and max_per_person checks
     for v_item in select * from jsonb_array_elements(p_items)
-    loop    
+    loop
+        v_item_qty := (v_item->>'quantity')::int;
+
         select * into v_product
         from products
         where id = (v_item->>'product_id')::uuid
@@ -309,30 +340,34 @@ begin
             raise exception 'PRODUCT_NOT_FOUND';
         end if;
 
-        if v_product.stock_qty < (v_item->>'quantity')::int then
+        if v_product.stock_qty < v_item_qty then
             raise exception 'INSUFFICIENT_STOCK:%', v_product.name;
         end if;
 
+        if v_product.max_per_person is not null and v_item_qty > v_product.max_per_person then
+            raise exception 'PRODUCT_QUOTA_EXCEEDED:%', v_product.name;
+        end if;
+
         update products
-        set stock_qty = stock_qty - (v_item->>'quantity')::int
+        set stock_qty = stock_qty - v_item_qty
         where id = v_product.id;
 
         insert into order_items (order_id, product_id, quantity, unit_price)
         values (
-            p_order_id, 
+            p_order_id,
             v_product.id,
-            (v_item->>'quantity')::int,
+            v_item_qty,
             v_product.price
         );
 
-        v_total := v_total + v_product.price * (v_item->>'quantity')::int;
+        v_total := v_total + v_product.price * v_item_qty;
     end loop;
 
-    -- 5. update order amount and edit history
+    -- 8. update order amount and edit history
     update orders
     set total_amount    = v_total + pickup_fee,
         edit_count      = edit_count + 1,
         last_edited_at  = now()
-    where id = p_order_id; 
+    where id = p_order_id;
 end;
 $$;

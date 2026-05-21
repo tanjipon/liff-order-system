@@ -56,8 +56,8 @@ describe('GET /admin/roles', () => {
 
         expect(res.status).toBe(200)
         expect(Array.isArray(body.data)).toBe(true)
-        // owner must exist
-        expect(body.data.some((r: any) => r.name === 'owner')).toBe(true)
+        // 管理員 must exist
+        expect(body.data.some((r: any) => r.name === '管理員')).toBe(true)
     })
 })
 
@@ -74,7 +74,7 @@ describe('POST /admin/roles', () => {
     })
 
     it('duplicated role name: return ROLE_ALREADY_EXISTS', async () => {
-        const req = adminReq('http://localhost/api/admin/roles', 'POST', { name: 'owner' })
+        const req = adminReq('http://localhost/api/admin/roles', 'POST', { name: '管理員' })
         const res = await createRole(req)
         const body = await res.json()
 

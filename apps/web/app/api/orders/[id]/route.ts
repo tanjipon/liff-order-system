@@ -30,13 +30,13 @@ export async function GET(
                 recipient_name,
                 recipient_phone,
                 recipient_address,
-                sessions ( title ),
+                sessions ( title, per_person_limit ),
                 pickup_options ( name, description ),
                 order_items (
                     quantity,
                     unit_price,
                     product_id,
-                    products ( name )
+                    products ( name, max_per_person, stock_qty )
                 )
             `)
             .eq('id', id)
