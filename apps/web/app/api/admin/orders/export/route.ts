@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
         const { data: orders, error } = await query
         if (error) throw new Error(error.message)
 
-        const csv = buildCsv(orders ?? [])
+        const csv = buildCsv((orders ?? []) as unknown as OrderRow[])
 
         return new Response(csv, {
             headers: {
@@ -72,11 +72,11 @@ type OrderRow = {
     created_at: string
     customer_name: string
     customer_phone: string
-    pickup_options: { name: string }[] | null
+    pickup_options: { name: string } | null   // many-to-one: single object
     order_items: {
         quantity: number
         unit_price: number
-        products: { name: string }[]
+        products: { name: string } | null     // many-to-one: single object
     }[]
 }
 
@@ -100,16 +100,18 @@ function buildCsv(orders: OrderRow[]): string {
         const orderNum = o.order_number ? `#${String(o.order_number).padStart(4, '0')}` : ''
         const queueNum = o.queue_number ?? ''
         const status   = STATUS_LABEL[o.status] ?? o.status
-        const pickup   = o.pickup_options?.[0]?.name ?? ''
+        const pickup   = o.pickup_options?.name ?? ''
         const payment  = o.payment_method === 'bank_transfer' ? '銀行匯款' : '現金付款'
         const created  = new Date(o.created_at).toLocaleString('zh-TW')
 
         for (const item of o.order_items) {
-            const productName = item.products[0]?.name ?? ''
+            const productName = item.products?.name ?? ''
             const subtotal = item.unit_price * item.quantity
 
+            // Prefix phone with tab so Excel treats it as text (preserves leading zero)
+            const phone = o.customer_phone ? `\t${o.customer_phone}` : ''
             itemRows.push([
-                orderNum, queueNum, status, o.line_display_name, o.customer_name, o.customer_phone,
+                orderNum, queueNum, status, o.line_display_name, o.customer_name, phone,
                 pickup, payment, o.remit_last5 ?? '',
                 productName, item.quantity, item.unit_price, subtotal, o.total_amount, created,
             ])
