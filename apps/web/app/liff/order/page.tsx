@@ -146,12 +146,15 @@ function OrderPageInner() {
                         .then(res => res.json())
                         .then(body => {
                             if (body.data) {
-                                const activeOrders = body.data.filter((o: any) => o.status !== 'cancelled')
-                                const used = activeOrders.reduce((sum: number, o: any) =>
+                                // Only count non-cancelled orders from the current session
+                                const sessionOrders = body.data.filter((o: any) =>
+                                    o.status !== 'cancelled' && o.session_id === session?.id
+                                )
+                                const used = sessionOrders.reduce((sum: number, o: any) =>
                                     sum + o.order_items.reduce((s: number, i: any) => s + i.quantity, 0), 0)
                                 setQuotaUsed(used)
                                 const perProduct: Record<string, number> = {}
-                                activeOrders.forEach((o: any) => {
+                                sessionOrders.forEach((o: any) => {
                                     o.order_items.forEach((i: any) => {
                                         perProduct[i.product_id] = (perProduct[i.product_id] ?? 0) + i.quantity
                                     })

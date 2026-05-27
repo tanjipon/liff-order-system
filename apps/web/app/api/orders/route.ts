@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
             .from('orders')
             .select(`
                 id,
+                session_id,
                 order_number,
                 status,
                 payment_method,
