@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import { CircleX } from 'lucide-react'
 import ImageCropper from './ImageCropper'
 import { adminFetch } from '@/lib/auth/adminClient'
 
@@ -65,10 +66,10 @@ export default function ProductImageStrip({ productId, images, onLightbox, onCha
                             type="button"
                             onClick={() => handleRemove(img.linkId)}
                             disabled={removing === img.linkId}
-                            className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-white flex items-center justify-center leading-none opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                            style={{ backgroundColor: '#DC2626', fontSize: 10 }}
+                            className="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity disabled:opacity-50"
+                            style={{ color: '#DC2626' }}
                         >
-                            ✕
+                            <CircleX className="w-4 h-4" />
                         </button>
                     </div>
                 ))}
