@@ -62,8 +62,11 @@ export async function POST (req: NextRequest) {
         }
 
         // 1. send invite email and create auth user
-        const { data: inviteData, error: inviteError } = 
-            await supabase.auth.admin.inviteUserByEmail(email)
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+        const { data: inviteData, error: inviteError } =
+            await supabase.auth.admin.inviteUserByEmail(email, {
+                redirectTo: `${appUrl}/auth/callback`,
+            })
 
         if (inviteError) return errorResponse('CREATE_USER_FAILED', 400)
 

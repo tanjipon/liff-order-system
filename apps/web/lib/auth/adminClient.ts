@@ -5,6 +5,11 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+export async function adminSignOut() {
+    await supabase.auth.signOut()
+    window.location.href = '/admin/login'
+}
+
 export async function getAdminToken(): Promise<string> {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {

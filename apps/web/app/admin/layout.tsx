@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { adminFetch } from '@/lib/auth/adminClient'
+import { LogOut } from 'lucide-react'
+import { adminFetch, adminSignOut } from '@/lib/auth/adminClient'
 
 const NAV_ITEMS = [
     { href: '/admin', label: '訂單管理' },
@@ -58,6 +59,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         </Link>
                     )
                 })}
+                <button
+                    onClick={adminSignOut}
+                    className="shrink-0 ml-auto p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                    title="登出"
+                    style={{ color: 'var(--color-admin-muted)' }}
+                >
+                    <LogOut className="w-4 h-4" />
+                </button>
             </nav>
 
             {/* 桌機：側邊欄 */}
@@ -94,6 +103,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         )
                     })}
                 </nav>
+                <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--color-admin-border)' }}>
+                    <button
+                        onClick={adminSignOut}
+                        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm transition-colors hover:bg-gray-100"
+                        style={{ color: 'var(--color-admin-muted)' }}
+                    >
+                        <LogOut className="w-4 h-4" />
+                        登出
+                    </button>
+                </div>
             </aside>
 
             {/* Main content */}

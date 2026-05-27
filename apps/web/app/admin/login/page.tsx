@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -8,7 +9,10 @@ const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-export default function LoginPage() {
+function LoginForm() {
+    const searchParams = useSearchParams()
+    const setupDone = searchParams.get('setup') === 'done'
+
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
@@ -33,6 +37,10 @@ export default function LoginPage() {
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="bg-white rounded-lg shadow p-8 w-full max-w-sm space-y-4">
                 <h1 className="text-xl font-bold text-center">後台登入</h1>
+
+                {setupDone && (
+                    <p className="text-sm text-green-600 text-center">密碼設定完成，請登入</p>
+                )}
 
                 {error && (
                     <p className="text-sm text-red-500 text-center">{error}</p>
@@ -64,5 +72,15 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gray-50" />
+        }>
+            <LoginForm />
+        </Suspense>
     )
 }
