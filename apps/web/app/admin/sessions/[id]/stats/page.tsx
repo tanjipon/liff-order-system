@@ -74,7 +74,7 @@ export default function SessionStatsPage() {
             {/* 頁首 */}
             <div className="flex items-center gap-3">
                 <Link href={`/admin/sessions/${id}`}
-                    className="text-sm px-3 py-1.5 rounded-lg border"
+                    className="text-sm px-3 py-1.5 rounded-lg border flex items-center gap-1"
                     style={css.surface}>
                     <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>返回</span>
                 </Link>
