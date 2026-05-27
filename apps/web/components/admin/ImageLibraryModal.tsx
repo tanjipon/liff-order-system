@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
+import { X } from 'lucide-react'
 import { adminFetch } from '@/lib/auth/adminClient'
 
 type ImageRecord = { id: string; url: string; name: string | null; created_at: string }
@@ -35,7 +36,7 @@ export default function ImageLibraryModal({ onSelect, onClose }: Props) {
             onClick={onClose}
         >
             <div
-                className="w-full max-w-2xl rounded-2xl border overflow-hidden flex flex-col"
+                className="w-full sm:max-w-2xl rounded-2xl border overflow-hidden flex flex-col"
                 style={{ ...css.surface, maxHeight: '80vh' }}
                 onClick={e => e.stopPropagation()}
             >
@@ -45,10 +46,10 @@ export default function ImageLibraryModal({ onSelect, onClose }: Props) {
                     <h2 className="text-sm font-semibold" style={css.text}>從圖庫選擇</h2>
                     <button
                         onClick={onClose}
-                        className="text-lg leading-none px-2"
+                        className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
                         style={css.muted}
                     >
-                        ✕
+                        <X className="w-4 h-4" />
                     </button>
                 </div>
 
