@@ -6,7 +6,7 @@ import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import { useLiff } from '@/components/liff/LiffProvider'
-import { CheckCircle, MinusCircle, PlusCircle } from 'lucide-react'
+import { CheckCircle, MinusCircle, PlusCircle, ChevronLeft } from 'lucide-react'
 import ProductGallery from '@/components/liff/ProductGallery'
 import AddressInput, { type AddressParts, EMPTY_ADDRESS } from '@/components/liff/AddressInput'
 import { formatAddress } from '@/lib/twAddress'
@@ -146,12 +146,15 @@ function OrderPageInner() {
                         .then(res => res.json())
                         .then(body => {
                             if (body.data) {
-                                const activeOrders = body.data.filter((o: any) => o.status !== 'cancelled')
-                                const used = activeOrders.reduce((sum: number, o: any) =>
+                                // Only count non-cancelled orders from the current session
+                                const sessionOrders = body.data.filter((o: any) =>
+                                    o.status !== 'cancelled' && o.session_id === session?.id
+                                )
+                                const used = sessionOrders.reduce((sum: number, o: any) =>
                                     sum + o.order_items.reduce((s: number, i: any) => s + i.quantity, 0), 0)
                                 setQuotaUsed(used)
                                 const perProduct: Record<string, number> = {}
-                                activeOrders.forEach((o: any) => {
+                                sessionOrders.forEach((o: any) => {
                                     o.order_items.forEach((i: any) => {
                                         perProduct[i.product_id] = (perProduct[i.product_id] ?? 0) + i.quantity
                                     })
@@ -276,7 +279,7 @@ function OrderPageInner() {
                         className={S.backBtn}
                         style={css.muted}
                     >
-                        ← 返回選單
+                        <ChevronLeft className="w-4 h-4" /><span>返回選單</span>
                     </button>
                 )}
                 <h1 className={S.title} style={css.text}>{session.title}</h1>
@@ -374,7 +377,7 @@ function OrderPageInner() {
     if (step === 'pickup') return (
         <div className={S.outer} style={css.bg}>
             <div className={S.inner}>
-                <button onClick={() => setStep('items')} className={S.backBtn} style={css.muted}>← 返回</button>
+                <button onClick={() => setStep('items')} className={S.backBtn} style={css.muted}><ChevronLeft className="w-4 h-4" />返回</button>
                 <h2 className={S.title} style={css.text}>選擇取貨方式</h2>
                 <div className="space-y-3">
                     {pickupOptions.map(option => (
@@ -426,7 +429,7 @@ function OrderPageInner() {
         return (
             <div className={S.outer} style={css.bg}>
                 <div className={S.inner}>
-                    <button onClick={() => setStep('pickup')} className={S.backBtn} style={css.muted}>← 返回</button>
+                    <button onClick={() => setStep('pickup')} className={S.backBtn} style={css.muted}><ChevronLeft className="w-4 h-4" />返回</button>
                     <h2 className={S.title} style={css.text}>選擇付款方式</h2>
                     <div className="space-y-3">
                         {availablePayments.map(p => (
@@ -472,7 +475,7 @@ function OrderPageInner() {
         return (
             <div className={S.outer} style={css.bg}>
                 <div className={S.inner}>
-                    <button onClick={() => setStep('payment')} className={S.backBtn} style={css.muted}>← 返回</button>
+                    <button onClick={() => setStep('payment')} className={S.backBtn} style={css.muted}><ChevronLeft className="w-4 h-4" />返回</button>
                     <h2 className={S.title} style={css.text}>填寫資料</h2>
 
                     {/* Orderer info */}
@@ -579,7 +582,7 @@ function OrderPageInner() {
         return (
             <div className={S.outer} style={css.bg}>
                 <div className={S.inner}>
-                    <button onClick={() => setStep('contact')} className={S.backBtn} style={css.muted}>← 返回</button>
+                    <button onClick={() => setStep('contact')} className={S.backBtn} style={css.muted}><ChevronLeft className="w-4 h-4" />返回</button>
                     <h2 className={S.title} style={css.text}>確認訂單</h2>
 
                     {/* 商品明細 */}

@@ -118,7 +118,7 @@ function buildCsv(orders: OrderRow[]): string {
         }
     }
 
-    return [headers, ...itemRows]
+    return '\uFEFF' + [headers, ...itemRows]
         .map(row => row.map(escape).join(','))
         .join('\n')
 }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminFetch } from '@/lib/auth/adminClient'
 import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 import DateTimePicker from '@/components/admin/DateTimePicker'
 
 const css = {
@@ -57,9 +58,9 @@ export default function NewSessionPage() {
             {/* 頁首 */}
             <div className="flex items-center gap-3 mb-6">
                 <Link href="/admin/sessions"
-                    className={`text-sm px-3 py-1.5 rounded-lg border ${btn.surface}`}
+                    className={`text-sm px-3 py-1.5 rounded-lg border flex items-center gap-1 ${btn.surface}`}
                     style={css.surface}>
-                    <span style={css.muted}>← 返回</span>
+                    <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>返回</span>
                 </Link>
                 <h1 className="text-xl font-semibold" style={css.text}>新增開單</h1>
             </div>

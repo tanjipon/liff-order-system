@@ -9,6 +9,7 @@ import AdminError from '@/components/admin/AdminError'
 import ProductImageStrip, { ImageLink } from '@/components/admin/ProductImageStrip'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 import Image from 'next/image'
 
 type ProductImageLink = { id: string; position: number; product_images: { id: string; url: string } }
@@ -221,9 +222,9 @@ export default function SessionDetailPage() {
             {/* 頁首 */}
             <div className="flex items-center gap-3 mb-2">
                 <Link href="/admin/sessions"
-                    className={`text-sm px-3 py-1.5 rounded-lg border ${btn.surface}`}
+                    className={`text-sm px-3 py-1.5 rounded-lg border flex items-center gap-1 ${btn.surface}`}
                     style={css.surface}>
-                    <span style={css.muted}>← 返回</span>
+                    <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>返回</span>
                 </Link>
             </div>
 
@@ -332,20 +333,14 @@ export default function SessionDetailPage() {
                                         </div>
                                     </form>
                                 ) : (
-                                    <div className="space-y-3">
+                                    <div className="space-y-2">
                                         <div className="flex justify-between items-start gap-3">
                                             <div className="min-w-0 flex-1">
                                                 <p className="font-semibold text-sm" style={css.text}>{p.name}</p>
-                                                <p className="text-xs mt-0.5 mb-2" style={css.muted}>
+                                                <p className="text-xs mt-0.5" style={css.muted}>
                                                     NT$ {p.price}・庫存 {p.stock_qty}
                                                     {p.max_per_person ? `・每人限購 ${p.max_per_person} 件` : ''}
                                                 </p>
-                                                <ProductImageStrip
-                                                    productId={p.id}
-                                                    images={getImages(p)}
-                                                    onLightbox={setLightboxUrl}
-                                                    onChange={loadSession}
-                                                />
                                             </div>
                                             <div className="flex gap-2 shrink-0">
                                                 <button
@@ -366,6 +361,12 @@ export default function SessionDetailPage() {
                                                     style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>刪除</button>
                                             </div>
                                         </div>
+                                        <ProductImageStrip
+                                            productId={p.id}
+                                            images={getImages(p)}
+                                            onLightbox={setLightboxUrl}
+                                            onChange={loadSession}
+                                        />
                                     </div>
                                 )}
                             </div>

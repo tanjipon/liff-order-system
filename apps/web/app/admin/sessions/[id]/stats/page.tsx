@@ -6,6 +6,7 @@ import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
 import AdminError from '@/components/admin/AdminError'
 import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 
 type ProductStat = {
     productId: string
@@ -73,9 +74,9 @@ export default function SessionStatsPage() {
             {/* 頁首 */}
             <div className="flex items-center gap-3">
                 <Link href={`/admin/sessions/${id}`}
-                    className="text-sm px-3 py-1.5 rounded-lg border"
+                    className="text-sm px-3 py-1.5 rounded-lg border flex items-center gap-1"
                     style={css.surface}>
-                    <span style={css.muted}>← 返回</span>
+                    <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>返回</span>
                 </Link>
                 <h1 className="text-xl font-semibold" style={css.text}>開單統計</h1>
             </div>
