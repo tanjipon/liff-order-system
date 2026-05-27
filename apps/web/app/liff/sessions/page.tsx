@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
+import { ChevronRight } from 'lucide-react'
 
 type Session = {
     id: string
@@ -143,7 +144,7 @@ export default function SessionsPage() {
                                     <div className="mt-3 flex justify-end">
                                         <span className="text-xs font-bold px-3 py-1.5 rounded-xl text-white"
                                             style={css.primary}>
-                                            立即訂購 →
+                                            立即訂購 <ChevronRight className="w-3.5 h-3.5 inline-block" />
                                         </span>
                                     </div>
                                 )}

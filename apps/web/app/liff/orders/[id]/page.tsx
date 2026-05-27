@@ -6,7 +6,7 @@ import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import { useLiff } from '@/components/liff/LiffProvider'
-import { Clock, CheckCircle, PlusCircle, MinusCircle } from 'lucide-react'
+import { Clock, CheckCircle, PlusCircle, MinusCircle, ChevronLeft } from 'lucide-react'
 
 type OrderItem = {
     quantity: number
@@ -227,7 +227,7 @@ export default function OrderDetailPage() {
                         className="text-sm px-3 py-1.5 rounded-xl border"
                         style={css.surface}
                     >
-                        <span style={css.muted}>← 返回</span>
+                        <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>返回</span>
                     </button>
                     <div>
                         <h1 className="text-lg font-bold" style={css.text}>訂單詳情</h1>

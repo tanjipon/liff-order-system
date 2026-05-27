@@ -6,7 +6,7 @@ import LiffLoader from '@/components/liff/LiffLoader'
 import LiffError from '@/components/liff/LiffError'
 import { useMinLoading } from '@/hooks/useMinLoading'
 import { useLiff } from '@/components/liff/LiffProvider'
-import { ShoppingBag } from 'lucide-react'
+import { ShoppingBag, ChevronLeft, ChevronRight } from 'lucide-react'
 
 type OrderItem = {
     quantity: number
@@ -100,7 +100,7 @@ export default function StatusPage() {
                 className="text-sm px-4 py-2 rounded-xl border"
                 style={css.surface}
             >
-                <span style={css.muted}>← 前往訂購</span>
+                <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>前往訂購</span>
             </button>
         </div>
     )
@@ -115,7 +115,7 @@ export default function StatusPage() {
                         className="text-sm px-3 py-1.5 rounded-xl border"
                         style={css.surface}
                     >
-                        <span style={css.muted}>← 繼續訂購</span>
+                        <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>繼續訂購</span>
                     </button>
                 </div>
 
@@ -165,7 +165,7 @@ export default function StatusPage() {
                                             需要操作
                                         </span>
                                     )}
-                                    <span className="text-sm" style={css.muted}>→</span>
+                                    <ChevronRight className="w-4 h-4" style={css.muted} />
                                 </div>
                             </div>
                         </button>
