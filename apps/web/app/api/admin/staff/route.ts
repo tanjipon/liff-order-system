@@ -68,7 +68,7 @@ export async function POST (req: NextRequest) {
                 redirectTo: `${origin}/auth/callback`,
             })
 
-        if (inviteError) return errorResponse('CREATE_USER_FAILED', 400)
+        if (inviteError) return errorResponse(inviteError.message, 400)
 
         // 2. create user_roles record
         const { error: roleError } = await supabase
