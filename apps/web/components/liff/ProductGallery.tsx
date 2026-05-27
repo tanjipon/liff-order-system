@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
@@ -22,21 +22,52 @@ export default function ProductGallery({ products }: Props) {
     )
 
     const [current, setCurrent] = useState(0)
+    const containerRef = useRef<HTMLDivElement>(null)
     const startX = useRef<number | null>(null)
+    const startY = useRef<number | null>(null)
+    const lockAxis = useRef<'h' | 'v' | null>(null)
+
+    // Register non-passive touchmove so preventDefault() works
+    useEffect(() => {
+        const el = containerRef.current
+        if (!el) return
+        function onTouchMove(e: TouchEvent) {
+            if (lockAxis.current === 'h') e.preventDefault()
+        }
+        el.addEventListener('touchmove', onTouchMove, { passive: false })
+        return () => el.removeEventListener('touchmove', onTouchMove)
+    }, [])
 
     if (slides.length === 0) return null
 
     function onTouchStart(e: React.TouchEvent) {
         startX.current = e.touches[0].clientX
+        startY.current = e.touches[0].clientY
+        lockAxis.current = null
+    }
+
+    function onTouchMove(e: React.TouchEvent) {
+        if (lockAxis.current !== null || startX.current === null || startY.current === null) return
+        const dx = Math.abs(e.touches[0].clientX - startX.current)
+        const dy = Math.abs(e.touches[0].clientY - startY.current)
+        if (dx > 5 || dy > 5) lockAxis.current = dx >= dy ? 'h' : 'v'
     }
 
     function onTouchEnd(e: React.TouchEvent) {
-        if (startX.current === null) return
+        if (startX.current === null || lockAxis.current !== 'h') {
+            startX.current = null
+            startY.current = null
+            lockAxis.current = null
+            return
+        }
         const diff = startX.current - e.changedTouches[0].clientX
-        if (Math.abs(diff) < 40) return
-        if (diff > 0) setCurrent(c => Math.min(c + 1, slides.length - 1))
-        else setCurrent(c => Math.max(c - 1, 0))
+        if (Math.abs(diff) >= 40) {
+            if (diff > 0) setCurrent(c => Math.min(c + 1, slides.length - 1))
+            else setCurrent(c => Math.max(c - 1, 0))
+        }
         startX.current = null
+        startY.current = null
+        lockAxis.current = null
     }
 
     const slide = slides[current]
@@ -45,9 +76,11 @@ export default function ProductGallery({ products }: Props) {
         <div className="mb-4">
             {/* 圖片區塊 */}
             <div
+                ref={containerRef}
                 className="relative w-full select-none rounded-2xl overflow-hidden"
                 style={{ aspectRatio: '4/3' }}
                 onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
                 onTouchEnd={onTouchEnd}
             >
                 <Image
