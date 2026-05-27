@@ -97,7 +97,7 @@ export default function StatusPage() {
             <p className="text-sm mb-6" style={css.muted}>目前沒有訂單紀錄</p>
             <button
                 onClick={() => router.push('/liff/sessions')}
-                className="text-sm px-4 py-2 rounded-xl border"
+                className="text-sm px-4 py-2 rounded-xl border flex items-center gap-1"
                 style={css.surface}
             >
                 <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>前往訂購</span>
@@ -112,7 +112,7 @@ export default function StatusPage() {
                     <h1 className="text-xl font-bold" style={css.text}>我的訂單</h1>
                     <button
                         onClick={() => router.push('/liff/sessions')}
-                        className="text-sm px-3 py-1.5 rounded-xl border"
+                        className="text-sm px-3 py-1.5 rounded-xl border flex items-center gap-1"
                         style={css.surface}
                     >
                         <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>繼續訂購</span>

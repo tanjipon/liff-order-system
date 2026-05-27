@@ -224,7 +224,7 @@ export default function OrderDetailPage() {
                 <div className="flex items-center gap-3 mb-4">
                     <button
                         onClick={() => router.push('/liff/status')}
-                        className="text-sm px-3 py-1.5 rounded-xl border"
+                        className="text-sm px-3 py-1.5 rounded-xl border flex items-center gap-1"
                         style={css.surface}
                     >
                         <ChevronLeft className="w-4 h-4" style={css.muted} /><span style={css.muted}>返回</span>
