@@ -30,8 +30,8 @@ export async function GET (req: NextRequest) {
 
         if (authError) throw new Error(authError.message)
 
-        const emailMap = Object.fromEntries(
-            users.map(u => [u.id, u.email ?? ''])
+        const userMap = Object.fromEntries(
+            users.map(u => [u.id, { email: u.email ?? '', emailConfirmed: !!u.email_confirmed_at }])
         )
 
         // 3. merge
@@ -39,7 +39,8 @@ export async function GET (req: NextRequest) {
             userId:         r.user_id,
             displayName:    r.display_name,
             isActive:       r.is_active,
-            email:          emailMap[r.user_id] ?? '',
+            email:          userMap[r.user_id]?.email ?? '',
+            emailConfirmed: userMap[r.user_id]?.emailConfirmed ?? false,
             role:           r.roles,
         }))
 
@@ -62,13 +63,13 @@ export async function POST (req: NextRequest) {
         }
 
         // 1. send invite email and create auth user
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+        const origin = req.headers.get('origin') ?? `https://${req.headers.get('host')}`
         const { data: inviteData, error: inviteError } =
             await supabase.auth.admin.inviteUserByEmail(email, {
-                redirectTo: `${appUrl}/auth/callback`,
+                redirectTo: `${origin}/auth/callback`,
             })
 
-        if (inviteError) return errorResponse('CREATE_USER_FAILED', 400)
+        if (inviteError) return errorResponse(inviteError.message, 400)
 
         // 2. create user_roles record
         const { error: roleError } = await supabase
