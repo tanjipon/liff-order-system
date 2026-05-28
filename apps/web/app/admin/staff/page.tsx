@@ -32,6 +32,8 @@ export default function StaffPage() {
     const [staff, setStaff] = useState<StaffMember[]>([])
     const [dataLoaded, setDataLoaded] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [resending, setResending] = useState<string | null>(null)
+    const [resendDone, setResendDone] = useState<string | null>(null)
 
     const { combine } = useMinLoading(1000)
     const isLoading = combine(dataLoaded)
@@ -63,8 +65,14 @@ export default function StaffPage() {
     }
 
     async function handleResendInvite(userId: string) {
-        await adminFetch(`/api/admin/staff/${userId}/resend-invite`, { method: 'POST' })
-        alert('邀請信已重新寄出')
+        setResending(userId)
+        try {
+            await adminFetch(`/api/admin/staff/${userId}/resend-invite`, { method: 'POST' })
+            setResendDone(userId)
+            setTimeout(() => setResendDone(null), 3000)
+        } finally {
+            setResending(null)
+        }
     }
 
     if (isLoading) return <AdminSpinner />
@@ -135,10 +143,20 @@ export default function StaffPage() {
                             <div className="shrink-0 flex gap-2">
                                 <button
                                     onClick={() => handleResendInvite(s.userId)}
-                                    disabled={s.emailConfirmed}
-                                    className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface} disabled:opacity-40 disabled:cursor-not-allowed`}
-                                    style={css.surface}>
-                                    <span style={css.muted}>重送邀請</span>
+                                    disabled={s.emailConfirmed || resending === s.userId || resendDone === s.userId}
+                                    className={`px-3 py-1.5 rounded-lg text-xs border flex items-center gap-1.5 ${btn.surface} disabled:opacity-40 disabled:cursor-not-allowed`}
+                                    style={resendDone === s.userId
+                                        ? { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }
+                                        : css.surface}>
+                                    {resending === s.userId && (
+                                        <svg className="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                        </svg>
+                                    )}
+                                    <span style={resendDone === s.userId ? { color: '#166534' } : css.muted}>
+                                        {resendDone === s.userId ? '✓ 已寄出' : '重送邀請'}
+                                    </span>
                                 </button>
                                 {s.isActive ? (
                                     <button
