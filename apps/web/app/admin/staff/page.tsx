@@ -12,6 +12,7 @@ type StaffMember = {
     displayName: string
     email: string
     isActive: boolean
+    emailConfirmed: boolean
     role: { id: string; name: string }
 }
 
@@ -119,6 +120,13 @@ export default function StaffPage() {
                                             {s.role.name}
                                         </span>
                                     )}
+                                    <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                        style={s.emailConfirmed
+                                            ? { backgroundColor: '#DCFCE7', color: '#166534' }
+                                            : { backgroundColor: '#FEF9C3', color: '#854D0E' }
+                                        }>
+                                        {s.emailConfirmed ? '已確認信箱' : '待確認信箱'}
+                                    </span>
                                 </div>
                                 <p className="text-xs mt-0.5 truncate" style={css.muted}>{s.email}</p>
                             </div>
@@ -127,6 +135,7 @@ export default function StaffPage() {
                             <div className="shrink-0 flex gap-2">
                                 <button
                                     onClick={() => handleResendInvite(s.userId)}
+                                    disabled={s.emailConfirmed}
                                     className={`px-3 py-1.5 rounded-lg text-xs border ${btn.surface}`}
                                     style={css.surface}>
                                     <span style={css.muted}>重送邀請</span>

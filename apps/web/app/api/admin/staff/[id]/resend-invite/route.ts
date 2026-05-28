@@ -20,11 +20,21 @@ export async function POST(
 
         if (userError || !user) return errorResponse('USER_NOT_FOUND', 404)
 
-        // 2. resen email
-        const { error: inviteError } =
-            await supabase.auth.admin.inviteUserByEmail(user.email!)
+        // 2. resend: invite if unconfirmed, reset password if already confirmed
+        const origin = req.headers.get('origin') ?? `https://${req.headers.get('host')}`
+        const isConfirmed = !!user.email_confirmed_at
 
-        if (inviteError) return errorResponse('RESEND_FAILED', 400)
+        if (isConfirmed) {
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(user.email!, {
+                redirectTo: `${origin}/auth/callback`,
+            })
+            if (resetError) return errorResponse('RESEND_FAILED', 400)
+        } else {
+            const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(user.email!, {
+                redirectTo: `${origin}/auth/callback`,
+            })
+            if (inviteError) return errorResponse('RESEND_FAILED', 400)
+        }
 
         return Response.json({ data: { success: true } })
     } catch (e: any) {

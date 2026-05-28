@@ -30,8 +30,8 @@ export async function GET (req: NextRequest) {
 
         if (authError) throw new Error(authError.message)
 
-        const emailMap = Object.fromEntries(
-            users.map(u => [u.id, u.email ?? ''])
+        const userMap = Object.fromEntries(
+            users.map(u => [u.id, { email: u.email ?? '', emailConfirmed: !!u.email_confirmed_at }])
         )
 
         // 3. merge
@@ -39,7 +39,8 @@ export async function GET (req: NextRequest) {
             userId:         r.user_id,
             displayName:    r.display_name,
             isActive:       r.is_active,
-            email:          emailMap[r.user_id] ?? '',
+            email:          userMap[r.user_id]?.email ?? '',
+            emailConfirmed: userMap[r.user_id]?.emailConfirmed ?? false,
             role:           r.roles,
         }))
 
