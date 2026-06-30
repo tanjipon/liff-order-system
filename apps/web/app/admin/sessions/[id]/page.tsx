@@ -44,6 +44,20 @@ type Restock = {
     restock_items: RestockItem[]
 }
 
+type PickupOption = {
+    id: string
+    name: string
+    description: string | null
+    extra_fee: number
+    is_active: boolean
+}
+
+type SessionPickupOption = {
+    id: string
+    sort_order: number
+    pickup_options: PickupOption
+}
+
 type Session = {
     id: string
     title: string
@@ -96,6 +110,13 @@ export default function SessionDetailPage() {
     const [addingRestock, setAddingRestock] = useState(false)
     const [restockError, setRestockError] = useState<string | null>(null)
 
+    const [sessionPickupOptions, setSessionPickupOptions] = useState<SessionPickupOption[]>([])
+    const [allPickupOptions, setAllPickupOptions] = useState<PickupOption[]>([])
+    const [selectedPickupOptionId, setSelectedPickupOptionId] = useState('')
+    const [addingPickup, setAddingPickup] = useState(false)
+    const [pickupError, setPickupError] = useState<string | null>(null)
+    const [confirmRemovePickupId, setConfirmRemovePickupId] = useState<string | null>(null)
+
     const { combine } = useMinLoading(1000)
     const isLoading = combine(dataLoaded)
 
@@ -120,9 +141,54 @@ export default function SessionDetailPage() {
         } catch { }
     }
 
+    async function loadPickupOptions() {
+        try {
+            const [sessionRes, allRes] = await Promise.all([
+                adminFetch(`/api/admin/sessions/${id}/pickup-options`),
+                adminFetch('/api/admin/pickup-options'),
+            ])
+            const sessionBody = await sessionRes.json()
+            const allBody = await allRes.json()
+            if (sessionBody.data) setSessionPickupOptions(sessionBody.data)
+            if (allBody.data) {
+                setAllPickupOptions(allBody.data)
+                const assigned = new Set((sessionBody.data ?? []).map((s: SessionPickupOption) => s.pickup_options.id))
+                const first = allBody.data.find((o: PickupOption) => !assigned.has(o.id))
+                if (first) setSelectedPickupOptionId(first.id)
+            }
+        } catch { }
+    }
+
+    async function handleAddPickupOption(e: React.SyntheticEvent) {
+        e.preventDefault()
+        if (!selectedPickupOptionId) return
+        setAddingPickup(true)
+        setPickupError(null)
+        try {
+            const res = await adminFetch(`/api/admin/sessions/${id}/pickup-options`, {
+                method: 'POST',
+                body: JSON.stringify({ pickupOptionId: selectedPickupOptionId }),
+            })
+            const body = await res.json()
+            if (!res.ok) throw new Error(body.error ?? '新增失敗')
+            await loadPickupOptions()
+        } catch (e: any) {
+            setPickupError(e.message)
+        } finally {
+            setAddingPickup(false)
+        }
+    }
+
+    async function handleRemovePickupOption(optionId: string) {
+        setConfirmRemovePickupId(null)
+        await adminFetch(`/api/admin/sessions/${id}/pickup-options/${optionId}`, { method: 'DELETE' })
+        loadPickupOptions()
+    }
+
     useEffect(() => {
         loadSession()
         loadRestocks()
+        loadPickupOptions()
     }, [])
 
     async function handleAddProduct(e: React.SyntheticEvent) {
@@ -436,6 +502,84 @@ export default function SessionDetailPage() {
                         {adding ? '新增中...' : '新增商品'}
                     </button>
                 </form>
+            </div>
+
+            {/* 取貨方式 */}
+            <div>
+                <h2 className="text-base font-semibold mb-3" style={css.text}>取貨方式</h2>
+
+                {sessionPickupOptions.length === 0 ? (
+                    <div className="rounded-xl border p-6 text-center mb-4" style={css.surface}>
+                        <p className="text-sm" style={css.muted}>尚未指定取貨方式</p>
+                    </div>
+                ) : (
+                    <div className="rounded-xl border overflow-hidden mb-4" style={css.surface}>
+                        {sessionPickupOptions.map((s, idx) => (
+                            <div key={s.id}
+                                className={`p-4 flex items-center justify-between gap-3 ${idx !== 0 ? 'border-t' : ''}`}
+                                style={idx !== 0 ? css.border : {}}>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold" style={css.text}>{s.pickup_options.name}</p>
+                                    <p className="text-xs mt-0.5" style={css.muted}>
+                                        {s.pickup_options.extra_fee > 0 ? `+NT$ ${s.pickup_options.extra_fee}` : '免費'}
+                                        {s.pickup_options.description ? `・${s.pickup_options.description}` : ''}
+                                        {!s.pickup_options.is_active && (
+                                            <span className="ml-1.5 text-xs" style={{ color: '#EF4444' }}>（已停用）</span>
+                                        )}
+                                    </p>
+                                </div>
+                                {confirmRemovePickupId === s.pickup_options.id ? (
+                                    <div className="flex gap-1.5 shrink-0">
+                                        <button
+                                            onClick={() => handleRemovePickupOption(s.pickup_options.id)}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${btn.solid}`}
+                                            style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>確認</button>
+                                        <button
+                                            onClick={() => setConfirmRemovePickupId(null)}
+                                            className={`px-2.5 py-1 rounded-lg text-xs border ${btn.surface}`}
+                                            style={css.surface}>
+                                            <span style={css.muted}>取消</span>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setConfirmRemovePickupId(s.pickup_options.id)}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 ${btn.solid}`}
+                                        style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>移除</button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {pickupError && <p className="text-xs mb-3" style={{ color: '#DC2626' }}>{pickupError}</p>}
+
+                {/* 新增取貨方式 */}
+                {allPickupOptions.filter(o => !sessionPickupOptions.some(s => s.pickup_options.id === o.id)).length > 0 && (
+                    <form onSubmit={handleAddPickupOption} className="rounded-xl border p-4 flex items-end gap-3" style={css.surface}>
+                        <div className="flex-1">
+                            <label className="block text-xs font-medium mb-1" style={css.muted}>加入取貨方式</label>
+                            <select
+                                value={selectedPickupOptionId}
+                                onChange={e => setSelectedPickupOptionId(e.target.value)}
+                                className="w-full border rounded-lg px-3 py-2 text-sm"
+                                style={css.surface}>
+                                {allPickupOptions
+                                    .filter(o => !sessionPickupOptions.some(s => s.pickup_options.id === o.id))
+                                    .map(o => (
+                                        <option key={o.id} value={o.id}>{o.name}</option>
+                                    ))}
+                            </select>
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={addingPickup || !selectedPickupOptionId}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 shrink-0 ${btn.solid}`}
+                            style={{ backgroundColor: 'var(--color-admin-primary)' }}>
+                            {addingPickup ? '加入中...' : '加入'}
+                        </button>
+                    </form>
+                )}
             </div>
 
             {/* 追加庫存排程 */}

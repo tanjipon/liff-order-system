@@ -173,7 +173,7 @@ function OrderPageInner() {
 
     useEffect(() => {
         if (step === 'pickup' && pickupOptions.length === 0) {
-            fetch('/api/pickup-options')
+            fetch(`/api/pickup-options?sessionId=${session?.id ?? ''}`)
                 .then(res => res.json())
                 .then(body => setPickupOptions(body.data ?? []))
         }
