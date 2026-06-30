@@ -67,7 +67,19 @@ export async function PUT (
             p_items:        items
         })
 
-        if (error) throw new Error(error.message)
+        if (error) {
+            const [code, productName] = error.message.split(':')
+            const msgMap: Record<string, string> = {
+                PRODUCT_QUOTA_EXCEEDED: productName ? `「${productName}」已超過每人購買上限` : '已超過此商品每人購買上限',
+                INSUFFICIENT_STOCK:     productName ? `「${productName}」庫存不足` : '商品庫存不足',
+                QUOTA_EXCEEDED:         '已超過本次開單每人購買上限',
+                PRODUCT_NOT_FOUND:      '商品不存在',
+            }
+            return Response.json(
+                { error: code, message: msgMap[code] ?? '修改失敗，請再試一次' },
+                { status: 400 }
+            )
+        }
 
         return Response.json({ data: { success: true } })
     } catch (e: any) {
