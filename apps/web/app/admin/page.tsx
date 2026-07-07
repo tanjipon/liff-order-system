@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { Search, X } from 'lucide-react'
 import { adminFetch } from '@/lib/auth/adminClient'
 import AdminSpinner from '@/components/admin/AdminSpinner'
 import AdminError from '@/components/admin/AdminError'
@@ -25,6 +26,7 @@ type Order = {
     recipient_name: string
     recipient_phone: string
     recipient_address: string | null
+    sessions: { title: string } | null
     pickup_options: { name: string } | null
     order_items: {
         product_id: string
@@ -42,6 +44,8 @@ const STATUS_LABEL: Record<string, string> = {
     in_production: '製作中',
     pending_payment: '待付款',
     payment_submitted: '付款確認中',
+    completed: '已完成',
+    cancelled: '已取消',
 }
 
 const STATUS_STYLE: Record<string, { backgroundColor: string; color: string }> = {
@@ -49,6 +53,8 @@ const STATUS_STYLE: Record<string, { backgroundColor: string; color: string }> =
     in_production: { backgroundColor: '#DBEAFE', color: '#1E40AF' },
     pending_payment: { backgroundColor: '#FFEDD5', color: '#9A3412' },
     payment_submitted: { backgroundColor: '#EDE9FE', color: '#5B21B6' },
+    completed: { backgroundColor: '#DCFCE7', color: '#166534' },
+    cancelled: { backgroundColor: '#F3F4F6', color: '#6B7280' },
 }
 
 const css = {
@@ -90,7 +96,8 @@ export default function AdminDashBoard() {
 
     const [filterStatus, setFilterStatus] = useState('')
     const [filterSessionId, setFilterSessionId] = useState('')
-    const [filterProductId, setFilterProductId] = useState('')
+    const [filterProductIds, setFilterProductIds] = useState<string[]>([])
+    const [filterOrderNumber, setFilterOrderNumber] = useState('')
     const [sessions, setSessions] = useState<Session[]>([])
     const [products, setProducts] = useState<Product[]>([])
     const [page, setPage] = useState(1)
@@ -103,9 +110,10 @@ export default function AdminDashBoard() {
         setError(null)
         try {
             const params = new URLSearchParams({ page: String(p), limit: String(PAGE_LIMIT) })
+            if (filterOrderNumber) params.set('orderNumber', filterOrderNumber)
             if (filterStatus) params.set('status', filterStatus)
             if (filterSessionId) params.set('sessionId', filterSessionId)
-            if (filterProductId) params.set('productId', filterProductId)
+            if (filterProductIds.length > 0) params.set('productIds', filterProductIds.join(','))
 
             const res = await adminFetch(`/api/admin/orders?${params}`)
             const body = await res.json()
@@ -131,7 +139,7 @@ export default function AdminDashBoard() {
             setLoading(false)
             setDataLoaded(true)
         }
-    }, [filterStatus, filterSessionId, filterProductId])
+    }, [filterStatus, filterSessionId, filterProductIds, filterOrderNumber])
 
     // 初次載入
     useEffect(() => {
@@ -145,11 +153,11 @@ export default function AdminDashBoard() {
     useEffect(() => {
         setPage(1)
         fetchOrders(1)
-    }, [filterStatus, filterSessionId, filterProductId])
+    }, [filterStatus, filterSessionId, filterProductIds, filterOrderNumber])
 
     // 選 session 後載入商品
     useEffect(() => {
-        setFilterProductId('')
+        setFilterProductIds([])
         setProducts([])
         if (!filterSessionId) return
         adminFetch(`/api/admin/sessions/${filterSessionId}`)
@@ -186,7 +194,7 @@ export default function AdminDashBoard() {
         fetchOrders(p, true)
     }
 
-    const hasFilter = filterStatus || filterSessionId || filterProductId
+    const hasFilter = filterStatus || filterSessionId || filterProductIds.length > 0 || filterOrderNumber
 
     if (isLoading) return <AdminSpinner />
     if (error) return <AdminError error={error} onRetry={() => fetchOrders(page)} />
@@ -214,11 +222,34 @@ export default function AdminDashBoard() {
 
             {/* 篩選列 */}
             <div className="rounded-xl border p-3 mb-4 space-y-2" style={css.surface}>
+                <div className="relative">
+                    <input
+                        type="number"
+                        min="1"
+                        value={filterOrderNumber}
+                        onChange={e => setFilterOrderNumber(e.target.value)}
+                        placeholder="搜尋單號（輸入數字）"
+                        className="border rounded-lg pl-3 pr-9 text-xs w-full h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        style={css.surface}
+                    />
+                    {filterOrderNumber ? (
+                        <button
+                            type="button"
+                            onClick={() => setFilterOrderNumber('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+                            style={{ color: 'var(--color-admin-muted)' }}
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    ) : (
+                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--color-admin-muted)' }} />
+                    )}
+                </div>
                 <div className="flex flex-col md:flex-row gap-2">
                     <select
                         value={filterStatus}
                         onChange={e => setFilterStatus(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full cursor-pointer"
+                        className="border rounded-lg px-3 text-xs md:flex-1 w-full cursor-pointer h-9 appearance-none"
                         style={css.surface}
                     >
                         <option value="">所有狀態</option>
@@ -230,7 +261,7 @@ export default function AdminDashBoard() {
                     <select
                         value={filterSessionId}
                         onChange={e => setFilterSessionId(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full cursor-pointer"
+                        className="border rounded-lg px-3 text-xs md:flex-1 w-full cursor-pointer h-9 appearance-none"
                         style={css.surface}
                     >
                         <option value="">所有開單</option>
@@ -239,23 +270,33 @@ export default function AdminDashBoard() {
                         ))}
                     </select>
 
-                    <select
-                        value={filterProductId}
-                        onChange={e => setFilterProductId(e.target.value)}
-                        disabled={!filterSessionId}
-                        className="border rounded-lg px-3 py-2 text-xs md:flex-1 w-full disabled:opacity-40 cursor-pointer"
-                        style={css.surface}
-                    >
-                        <option value="">所有商品</option>
-                        {products.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                    </select>
+                    {filterSessionId && products.length > 0 && (
+                        <div className="border rounded-lg px-3 py-2 md:flex-1 space-y-1.5" style={css.surface}>
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs" style={css.muted}>商品篩選</span>
+                                {filterProductIds.length > 0 && (
+                                    <button type="button" onClick={() => setFilterProductIds([])} className="text-xs cursor-pointer" style={css.muted}>清除</button>
+                                )}
+                            </div>
+                            {products.map(p => (
+                                <label key={p.id} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={filterProductIds.includes(p.id)}
+                                        onChange={e => setFilterProductIds(prev =>
+                                            e.target.checked ? [...prev, p.id] : prev.filter(id => id !== p.id)
+                                        )}
+                                    />
+                                    <span className="text-xs" style={css.text}>{p.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {hasFilter && (
                     <button
-                        onClick={() => { setFilterStatus(''); setFilterSessionId(''); setFilterProductId('') }}
+                        onClick={() => { setFilterStatus(''); setFilterSessionId(''); setFilterProductIds([]); setFilterOrderNumber('') }}
                         className={`text-xs px-3 py-1 rounded-lg border ${btn.surface}`}
                         style={css.surface}
                     >
@@ -315,6 +356,9 @@ export default function AdminDashBoard() {
                                                 })}
                                             </span>
                                         </div>
+                                        {order.sessions?.title && (
+                                            <p className="text-xs mt-0.5" style={css.muted}>{order.sessions.title}</p>
+                                        )}
                                     </div>
 
                                     {/* 操作按鈕 */}
