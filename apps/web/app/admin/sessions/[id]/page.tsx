@@ -555,7 +555,7 @@ export default function SessionDetailPage() {
                 {pickupError && <p className="text-xs mb-3" style={{ color: '#DC2626' }}>{pickupError}</p>}
 
                 {/* 新增取貨方式 */}
-                {allPickupOptions.filter(o => !sessionPickupOptions.some(s => s.pickup_options.id === o.id)).length > 0 && (
+                {allPickupOptions.filter(o => o.is_active && !sessionPickupOptions.some(s => s.pickup_options.id === o.id)).length > 0 && (
                     <form onSubmit={handleAddPickupOption} className="rounded-xl border p-4 flex items-end gap-3" style={css.surface}>
                         <div className="flex-1">
                             <label className="block text-xs font-medium mb-1" style={css.muted}>加入取貨方式</label>
@@ -565,7 +565,7 @@ export default function SessionDetailPage() {
                                 className="w-full border rounded-lg px-3 py-2 text-sm"
                                 style={css.surface}>
                                 {allPickupOptions
-                                    .filter(o => !sessionPickupOptions.some(s => s.pickup_options.id === o.id))
+                                    .filter(o => o.is_active && !sessionPickupOptions.some(s => s.pickup_options.id === o.id))
                                     .map(o => (
                                         <option key={o.id} value={o.id}>{o.name}</option>
                                     ))}
