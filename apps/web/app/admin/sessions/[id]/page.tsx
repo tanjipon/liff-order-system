@@ -153,7 +153,7 @@ export default function SessionDetailPage() {
             if (allBody.data) {
                 setAllPickupOptions(allBody.data)
                 const assigned = new Set((sessionBody.data ?? []).map((s: SessionPickupOption) => s.pickup_options.id))
-                const first = allBody.data.find((o: PickupOption) => !assigned.has(o.id))
+                const first = allBody.data.find((o: PickupOption) => o.is_active && !assigned.has(o.id))
                 if (first) setSelectedPickupOptionId(first.id)
             }
         } catch { }
