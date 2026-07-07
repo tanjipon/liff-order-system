@@ -20,3 +20,8 @@ insert into pickup_options (id, name, description, extra_fee, allowed_payment_me
     ('cccccccc-0000-0000-0000-000000000001', '自取', '至工作室自取，不需額外費用', 0, null, true, 1),
     ('cccccccc-0000-0000-0000-000000000002', '宅配', '全台宅配，運費 100 元', 100, '{"bank_transfer"}', true, 2);
 
+-- 4. Link pickup options to the test session
+insert into session_pickup_options (session_id, pickup_option_id, sort_order) values
+    ('aaaaaaaa-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000001', 1),
+    ('aaaaaaaa-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-000000000002', 2);
+

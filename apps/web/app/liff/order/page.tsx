@@ -138,9 +138,10 @@ function OrderPageInner() {
             .then(res => res.json())
             .then(body => {
                 if (body.data) {
-                    setSession(body.data)
+                    const sessionData = body.data
+                    setSession(sessionData)
                     const init: Record<string, number> = {}
-                    body.data.products.forEach((p: Product) => { init[p.id] = 0 })
+                    sessionData.products.forEach((p: Product) => { init[p.id] = 0 })
                     setQuantities(init)
                     fetch('/api/orders', { headers: { 'x-liff-token': token } })
                         .then(res => res.json())
@@ -148,7 +149,7 @@ function OrderPageInner() {
                             if (body.data) {
                                 // Only count non-cancelled orders from the current session
                                 const sessionOrders = body.data.filter((o: any) =>
-                                    o.status !== 'cancelled' && o.session_id === session?.id
+                                    o.status !== 'cancelled' && o.session_id === sessionData.id
                                 )
                                 const used = sessionOrders.reduce((sum: number, o: any) =>
                                     sum + o.order_items.reduce((s: number, i: any) => s + i.quantity, 0), 0)
@@ -172,7 +173,7 @@ function OrderPageInner() {
 
     useEffect(() => {
         if (step === 'pickup' && pickupOptions.length === 0) {
-            fetch('/api/pickup-options')
+            fetch(`/api/pickup-options?sessionId=${session?.id ?? ''}`)
                 .then(res => res.json())
                 .then(body => setPickupOptions(body.data ?? []))
         }
@@ -257,7 +258,7 @@ function OrderPageInner() {
                 })
             })
             const body = await res.json()
-            if (!res.ok) throw new Error(body.error ?? '訂單送出失敗')
+            if (!res.ok) throw new Error(body.message ?? '訂單送出失敗')
             setOrderId(body.data.orderId)
             setOrderNumber(body.data.orderNumber)
         } catch (e: any) {
@@ -296,8 +297,8 @@ function OrderPageInner() {
                 {/* per_person_limit 提示 */}
                 {session.per_person_limit && (
                     <div className={`text-sm mb-4 p-3 rounded-xl ${totalSelected >= session.per_person_limit ? '' : ''
-                        }`} style={totalSelected >= session.per_person_limit ? css.dangerBg : { backgroundColor: 'var(--color-liff-bg)', color: 'var(--color-liff-muted)', border: '1px solid var(--color-liff-border)' }}>
-                        每人限購 {session.per_person_limit} 件・已選 {totalSelected} 件
+                        }`} style={totalSelected >= session.per_person_limit ? { ...css.dangerBg, border: '1px solid transparent' } : { backgroundColor: 'var(--color-liff-bg)', color: 'var(--color-liff-muted)', border: '1px solid var(--color-liff-border)' }}>
+                        每人限購 {session.per_person_limit} 件・{quotaUsed > 0 && `已訂購 ${quotaUsed} 件・`}本次已選 {totalItems} 件
                     </div>
                 )}
 
@@ -323,7 +324,10 @@ function OrderPageInner() {
                                 )}
                                 {/* 每人限購提示 */}
                                 {product.max_per_person !== null && (
-                                    <p className="text-xs mt-0.5" style={css.muted}>每人限購 {product.max_per_person} 件</p>
+                                    <p className="text-xs mt-0.5" style={css.muted}>
+                                        每人限購 {product.max_per_person} 件
+                                        {(productQuotaUsed[product.id] ?? 0) > 0 && `・已訂購 ${productQuotaUsed[product.id]} 件`}
+                                    </p>
                                 )}
                             </div>
 

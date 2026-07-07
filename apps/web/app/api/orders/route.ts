@@ -28,7 +28,21 @@ export async function POST(req: NextRequest) {
             p_recipient_address:    recipientAddress ?? null,
         })
 
-        if (error) throw new Error(error.message)
+        if (error) {
+            const [code, productName] = error.message.split(':')
+            const msgMap: Record<string, string> = {
+                PRODUCT_QUOTA_EXCEEDED: productName ? `「${productName}」已超過每人購買上限` : '已超過此商品每人購買上限',
+                INSUFFICIENT_STOCK:     productName ? `「${productName}」庫存不足` : '商品庫存不足',
+                QUOTA_EXCEEDED:         '已超過本次開單每人購買上限',
+                SESSION_NOT_ACTIVE:     '目前沒有開放中的開單',
+                PRODUCT_NOT_FOUND:      '商品不存在',
+                PICKUP_OPTION_NOT_FOUND: '取貨方式不存在或已停用',
+            }
+            return Response.json(
+                { error: code, message: msgMap[code] ?? '訂單送出失敗，請再試一次' },
+                { status: 400 }
+            )
+        }
 
         const { data: order } = await supabase
             .from('orders')

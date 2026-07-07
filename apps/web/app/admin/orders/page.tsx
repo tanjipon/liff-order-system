@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Search, X } from 'lucide-react'
 import { adminFetch } from '@/lib/auth/adminClient'
 import Pagination from '@/components/admin/Pagination'
 import DateTimePicker from '@/components/admin/DateTimePicker'
@@ -16,6 +17,7 @@ type Order = {
     payment_method: string
     remit_last5: string | null
     created_at: string
+    sessions: { title: string } | null
     pickup_options: { name: string } | null
     customer_name: string
     customer_phone: string
@@ -85,7 +87,8 @@ export default function OrderHistoryPage() {
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
     const [sessionId, setSessionId] = useState('')
-    const [productId, setProductId] = useState('')
+    const [productIds, setProductIds] = useState<string[]>([])
+    const [orderNumber, setOrderNumber] = useState('')
 
     const [sessions, setSessions] = useState<Session[]>([])
     const [products, setProducts] = useState<Product[]>([])
@@ -100,7 +103,7 @@ export default function OrderHistoryPage() {
 
     // 選 session 後載入該 session 的商品
     useEffect(() => {
-        setProductId('')
+        setProductIds([])
         setProducts([])
         if (!sessionId) return
         adminFetch(`/api/admin/sessions/${sessionId}`)
@@ -111,9 +114,10 @@ export default function OrderHistoryPage() {
     async function fetchOrders(p: number, scroll = false) {
         setLoading(true)
         const params = new URLSearchParams({ history: 'true', page: String(p), limit: String(LIMIT) })
+        if (orderNumber) params.set('orderNumber', orderNumber)
         if (status) params.set('status', status)
         if (sessionId) params.set('sessionId', sessionId)
-        if (productId) params.set('productId', productId)
+        if (productIds.length > 0) params.set('productIds', productIds.join(','))
         if (dateFrom) params.set('dateFrom', dateFrom)
         if (dateTo) params.set('dateTo', dateTo)
 
@@ -143,9 +147,10 @@ export default function OrderHistoryPage() {
 
     async function handleExport() {
         const params = new URLSearchParams()
+        if (orderNumber) params.set('orderNumber', orderNumber)
         if (status) params.set('status', status)
         if (sessionId) params.set('sessionId', sessionId)
-        if (productId) params.set('productId', productId)
+        if (productIds.length > 0) params.set('productIds', productIds.join(','))
         if (dateFrom) params.set('dateFrom', dateFrom)
         if (dateTo) params.set('dateTo', dateTo)
 
@@ -172,6 +177,32 @@ export default function OrderHistoryPage() {
 
             {/* 篩選列 */}
             <div className="rounded-xl border p-4 mb-6 space-y-3 overflow-hidden" style={css.surface}>
+                <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium" style={css.muted}>單號</label>
+                    <div className="relative">
+                        <input
+                            type="number"
+                            min="1"
+                            value={orderNumber}
+                            onChange={e => setOrderNumber(e.target.value)}
+                            placeholder="輸入訂單號碼"
+                            className="border rounded-lg pl-3 pr-9 text-xs w-full h-9 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            style={css.surface}
+                        />
+                        {orderNumber ? (
+                            <button
+                                type="button"
+                                onClick={() => setOrderNumber('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+                                style={{ color: 'var(--color-admin-muted)' }}
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        ) : (
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--color-admin-muted)' }} />
+                        )}
+                    </div>
+                </div>
                 {/* 電腦版同一列，手機版狀態獨一列、日期獨一列 */}
                 <div className="flex flex-col md:flex-row gap-3">
                     <div className="flex flex-col gap-1 md:flex-1">
@@ -179,7 +210,7 @@ export default function OrderHistoryPage() {
                         <select
                             value={status}
                             onChange={e => setStatus(e.target.value)}
-                            className="border rounded-lg px-3 py-2 text-xs w-full cursor-pointer"
+                            className="border rounded-lg px-3 text-xs w-full cursor-pointer h-9 appearance-none"
                             style={css.surface}
                         >
                             <option value="">所有狀態</option>
@@ -214,7 +245,7 @@ export default function OrderHistoryPage() {
                         <select
                             value={sessionId}
                             onChange={e => setSessionId(e.target.value)}
-                            className="border rounded-lg px-3 py-2 text-xs w-full cursor-pointer"
+                            className="border rounded-lg px-3 text-xs w-full cursor-pointer h-9 appearance-none"
                             style={css.surface}
                         >
                             <option value="">所有開單</option>
@@ -224,21 +255,36 @@ export default function OrderHistoryPage() {
                         </select>
                     </div>
 
-                    <div className="flex flex-col gap-1 flex-1 min-w-40">
-                        <label className="text-xs font-medium" style={css.muted}>商品</label>
-                        <select
-                            value={productId}
-                            onChange={e => setProductId(e.target.value)}
-                            disabled={!sessionId}
-                            className="border rounded-lg px-3 py-2 text-xs w-full disabled:opacity-40 cursor-pointer"
-                            style={css.surface}
-                        >
-                            <option value="">所有商品</option>
-                            {products.map(p => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                        </select>
-                    </div>
+                    {sessionId && products.length > 0 && (
+                        <div className="flex flex-col gap-1 flex-1 min-w-40">
+                            <label className="text-xs font-medium" style={css.muted}>
+                                商品篩選
+                                {productIds.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setProductIds([])}
+                                        className="ml-2 cursor-pointer"
+                                        style={css.muted}>清除</button>
+                                )}
+                            </label>
+                            <div className="rounded-lg border px-3 py-2 space-y-1.5" style={css.surface}>
+                                {products.map(p => (
+                                    <label key={p.id} className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={productIds.includes(p.id)}
+                                            onChange={e => setProductIds(prev =>
+                                                e.target.checked
+                                                    ? [...prev, p.id]
+                                                    : prev.filter(id => id !== p.id)
+                                            )}
+                                        />
+                                        <span className="text-xs" style={css.text}>{p.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex gap-2 justify-end">
@@ -319,6 +365,9 @@ export default function OrderHistoryPage() {
                                                 })}
                                             </span>
                                         </div>
+                                        {order.sessions?.title && (
+                                            <p className="text-xs mt-0.5" style={css.text}>{order.sessions.title}</p>
+                                        )}
                                         <div className="mt-0.5 space-y-0.5">
                                             {order.order_items.map((i, idx) => (
                                                 <p key={idx} className="text-xs" style={css.muted}>
