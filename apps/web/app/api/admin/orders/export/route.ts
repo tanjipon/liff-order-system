@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
                 id, status, line_display_name, total_amount, pickup_fee,
                 order_number, queue_number, payment_method, remit_last5, created_at,
                 customer_name, customer_phone,
+                sessions ( title ),
                 pickup_options ( name ),
                 order_items (
                     quantity, unit_price,
@@ -72,6 +73,7 @@ type OrderRow = {
     created_at: string
     customer_name: string
     customer_phone: string
+    sessions: { title: string } | null
     pickup_options: { name: string } | null   // many-to-one: single object
     order_items: {
         quantity: number
@@ -83,7 +85,7 @@ type OrderRow = {
 function buildCsv(orders: OrderRow[]): string {
     const headers = [
         '訂單號碼', '排單號', '狀態', 'LINE名稱', '訂購人', '電話',
-        '取貨方式', '付款方式', '匯款後五碼',
+        '開單名稱', '取貨方式', '付款方式', '匯款後五碼',
         '商品名稱', '數量', '單價', '小計', '總金額', '建立時間',
     ]
 
@@ -108,11 +110,10 @@ function buildCsv(orders: OrderRow[]): string {
             const productName = item.products?.name ?? ''
             const subtotal = item.unit_price * item.quantity
 
-            // Prefix phone with tab so Excel treats it as text (preserves leading zero)
-            const phone = o.customer_phone ? `\t${o.customer_phone}` : ''
+            const phone = o.customer_phone ? `="${o.customer_phone}"` : ''
             itemRows.push([
                 orderNum, queueNum, status, o.line_display_name, o.customer_name, phone,
-                pickup, payment, o.remit_last5 ?? '',
+                o.sessions?.title ?? '', pickup, payment, o.remit_last5 ?? '',
                 productName, item.quantity, item.unit_price, subtotal, o.total_amount, created,
             ])
         }
