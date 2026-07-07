@@ -12,6 +12,11 @@ create table session_pickup_options (
 
 create index idx_session_pickup_options_session on session_pickup_options(session_id, sort_order);
 
+-- Grant access to all roles (ensures local dev works across supabase CLI versions)
+grant all on table session_pickup_options to postgres, anon, authenticated, service_role;
+grant all on all tables in schema public to postgres, anon, authenticated, service_role;
+grant all on all sequences in schema public to postgres, anon, authenticated, service_role;
+
 -- update create_order: pickup option must be assigned to the session
 create or replace function create_order(
     p_session_id        uuid,
