@@ -56,7 +56,7 @@ export default function DateTimePicker({ value, onChange, required }: Props) {
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger
-                className="admin-picker-trigger w-full text-left border rounded-lg px-2 py-2 text-xs"
+                className="admin-picker-trigger w-full text-left border rounded-lg px-3 text-xs h-9 flex items-center"
                 style={{
                     backgroundColor: 'var(--color-admin-surface)',
                     borderColor: 'var(--color-admin-border)',
